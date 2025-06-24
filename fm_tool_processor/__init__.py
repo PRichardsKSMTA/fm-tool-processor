@@ -9,7 +9,7 @@ from pathlib import Path
 
 import azure.functions as func
 
-from process_fm_tool import run_flow
+from ..fm_tool_core.process_fm_tool import run_flow
 
 def main(req: func.HttpRequest) -> func.HttpResponse:  # noqa: N802 – Azure sig
     logging.info("fm_tool_processor function triggered")
