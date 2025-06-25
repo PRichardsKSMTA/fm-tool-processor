@@ -17,7 +17,12 @@ from typing import Any, Dict, List
 import psutil, xlwings as xw
 from office365.runtime.auth.user_credential import UserCredential
 from office365.sharepoint.client_context import ClientContext
-from win32com.client import pythoncom
+from types import SimpleNamespace
+
+try:  # pythoncom is Windows-only; provide noop fallback for tests
+    from win32com.client import pythoncom  # type: ignore
+except Exception:  # pragma: no cover - triggered on non-Windows
+    pythoncom = SimpleNamespace(PumpWaitingMessages=lambda: None)
 
 # ---------- CONSTANTS ----------------------------------------------------- #
 READY_NAME, READY_OK, READY_ERR = "PY_READY_FLAG", "READY", "ERROR"
@@ -119,6 +124,12 @@ def run_macro(dst: Path, args: tuple, lg: logging.Logger):
             except Exception: pass
 
 
+# Backwards compatibility with older code/tests
+def run_excel_macro(dst: Path, args: tuple, lg: logging.Logger):
+    """Alias maintained for legacy unit tests."""
+    return run_macro(dst, args, lg)
+
+
 def read_cell(path: Path, col: str, row: str):
     app = xw.App(visible=False, add_book=False)
     try:
@@ -147,6 +158,12 @@ def sp_exists(ctx, rel):
         return False
 
 
+# Backwards compatibility for unit tests
+def sharepoint_file_exists(ctx, rel):
+    """Alias for :func:`sp_exists`."""
+    return sp_exists(ctx, rel)
+
+
 def sp_upload(ctx, folder, fname, local: Path):
     tgt = ctx.web.get_folder_by_server_relative_url(folder)
     with local.open("rb") as f:
@@ -162,6 +179,11 @@ def sp_upload(ctx, folder, fname, local: Path):
                 off += len(chunk)
 
 
+def sharepoint_upload(ctx, folder, fname, local: Path):
+    """Alias for :func:`sp_upload`."""
+    return sp_upload(ctx, folder, fname, local)
+
+
 # -------------------- WORK UNIT ------------------------------------------ #
 def process_row(it: Dict[str, Any], upload: bool, root: str,
                 run_id: str, lg: logging.Logger):
@@ -169,7 +191,7 @@ def process_row(it: Dict[str, Any], upload: bool, root: str,
     dst = copy_template(it["TOOL_TEMPLATE_FILEPATH"], root, unique_name, lg)
     lg.info("Template copied to %s", dst)
 
-    run_macro(dst, (it["SCAC_OPP"], it["WEEK_CT"], it["PROCESSING_WEEK"]), lg)
+    run_excel_macro(dst, (it["SCAC_OPP"], it["WEEK_CT"], it["PROCESSING_WEEK"]), lg)
 
     lg.info("Reading validation cells …")
     op = read_cell(dst, it["SCAC_VALIDATION_COLUMN"], it["SCAC_VALIDATION_ROW"])
