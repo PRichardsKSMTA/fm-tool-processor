@@ -36,6 +36,7 @@ except Exception:  # pragma: no cover - triggered on non-Windows
 # ---------- CONSTANTS ----------------------------------------------------- #
 READY_NAME, READY_OK, READY_ERR = "PY_READY_FLAG", "READY", "ERROR"
 READY_TO, OPEN_TO, POLL, RETRY_SLEEP = 600, 60, 0.25, 2
+MACRO_TO = READY_TO
 LOG_DIR = Path(os.getenv("LOG_DIR", "./logs")).resolve()
 SP_USERNAME, SP_PASSWORD = os.getenv("SP_USERNAME"), os.getenv("SP_PASSWORD")
 SP_CHUNK = int(os.getenv("SP_CHUNK_MB", "10")) * 1024 * 1024
@@ -136,7 +137,7 @@ def open_with_timeout(
             time.sleep(0.5)
 
 
-def run_macro(dst: Path, args: tuple, lg: logging.Logger):
+def _run_macro_impl(dst: Path, args: tuple, lg: logging.Logger):
     app, wb = open_with_timeout(dst, lg)
     try:
         lg.info("Running macro PopulateAndRunReport …")
@@ -150,6 +151,33 @@ def run_macro(dst: Path, args: tuple, lg: logging.Logger):
                 op()
             except Exception:
                 pass
+
+
+def run_macro(dst: Path, args: tuple, lg: logging.Logger):
+    """Run macro in a thread so KeyboardInterrupt can interrupt."""
+    exc: List[Exception] = []
+
+    def _worker():
+        try:
+            pythoncom.CoInitialize()
+            _run_macro_impl(dst, args, lg)
+        except Exception as e:  # pragma: no cover - worker errors
+            exc.append(e)
+        finally:
+            try:
+                pythoncom.CoUninitialize()
+            except Exception:
+                pass
+
+    th = threading.Thread(target=_worker, daemon=True)
+    th.start()
+    th.join(MACRO_TO)
+    if th.is_alive():
+        lg.error("Macro timed-out after %s s", MACRO_TO)
+        kill_orphan_excels()
+        raise FlowError("Timeout running macro", work_completed=False)
+    if exc:
+        raise exc[0]
 
 
 # Backwards compatibility with older code/tests
