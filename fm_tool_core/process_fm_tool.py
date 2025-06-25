@@ -20,13 +20,13 @@ import time
 import uuid
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, List
 
 import psutil
 import xlwings as xw
 from office365.runtime.auth.user_credential import UserCredential
 from office365.sharepoint.client_context import ClientContext
-from types import SimpleNamespace
 
 try:  # pythoncom is Windows-only; provide noop fallback for tests
     from win32com.client import pythoncom  # type: ignore
@@ -44,6 +44,7 @@ SP_CHUNK = int(os.getenv("SP_CHUNK_MB", "10")) * 1024 * 1024
 
 class FlowError(Exception):
     """Controlled exception with PAD-style flag."""
+
     def __init__(self, msg: str, *, work_completed: bool = False) -> None:
         super().__init__(msg)
         self.work_completed = work_completed
@@ -100,15 +101,11 @@ def wait_ready(wb: xw.Book, lg: logging.Logger):
         if flag == READY_ERR:
             raise FlowError("VBA signalled ERROR", work_completed=False)
         if elapsed >= READY_TO:
-            raise FlowError(
-                "Timeout waiting for READY flag", work_completed=False
-            )
+            raise FlowError("Timeout waiting for READY flag", work_completed=False)
         time.sleep(POLL)
 
 
-def open_with_timeout(
-    path: Path, lg: logging.Logger
-) -> tuple[xw.App, xw.Book]:
+def open_with_timeout(path: Path, lg: logging.Logger) -> tuple[xw.App, xw.Book]:
     lg.info("Creating Excel App …")
     app = xw.App(visible=False, add_book=False)
     app.api.Application.DisplayAlerts = False
@@ -212,8 +209,9 @@ def sharepoint_upload(ctx, folder, fname, local: Path):
 
 
 # -------------------- WORK UNIT ------------------------------------------ #
-def process_row(it: Dict[str, Any], upload: bool, root: str,
-                run_id: str, lg: logging.Logger):
+def process_row(
+    it: Dict[str, Any], upload: bool, root: str, run_id: str, lg: logging.Logger
+):
     unique_name = f"{Path(it['NEW_EXCEL_FILENAME']).stem}_{run_id}.xlsm"
     dst = copy_template(it["TOOL_TEMPLATE_FILEPATH"], root, unique_name, lg)
     lg.info("Template copied to %s", dst)
@@ -243,10 +241,7 @@ def process_row(it: Dict[str, Any], upload: bool, root: str,
         "Validation: %s=%s, %s=%s",
         f"{it['SCAC_VALIDATION_COLUMN']}{it['SCAC_VALIDATION_ROW']}",
         op,
-        (
-            f"{it['ORDERAREAS_VALIDATION_COLUMN']}"
-            f"{it['ORDERAREAS_VALIDATION_ROW']}"
-        ),
+        (f"{it['ORDERAREAS_VALIDATION_COLUMN']}" f"{it['ORDERAREAS_VALIDATION_ROW']}"),
         oa,
     )
     if op != it["SCAC_OPP"]:
@@ -293,11 +288,11 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
     lg = logging.getLogger("fm_tool")
     lg.setLevel(logging.INFO)
     lg.handlers.clear()
-    for h in (logging.StreamHandler(),
-              logging.FileHandler(log_file, encoding="utf-8")):
+    for h in (logging.StreamHandler(), logging.FileHandler(log_file, encoding="utf-8")):
         h.setFormatter(
-            logging.Formatter("%(asctime)s | %(levelname)s | %(message)s",
-                              "%Y-%m-%dT%H:%M:%SZ")
+            logging.Formatter(
+                "%(asctime)s | %(levelname)s | %(message)s", "%Y-%m-%dT%H:%M:%SZ"
+            )
         )
         lg.addHandler(h)
 
@@ -317,7 +312,10 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
                         raise
                     lg.warning(
                         "Retry %s/%s after %s: %s",
-                        attempt, max_try, ex.__class__.__name__, ex,
+                        attempt,
+                        max_try,
+                        ex.__class__.__name__,
+                        ex,
                     )
                     kill_orphan_excels()
                     time.sleep(RETRY_SLEEP)
@@ -330,18 +328,24 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     except KeyboardInterrupt:
         lg.error("Interrupted by user")
-        return {"Out_strWorkExceptionMessage": "Interrupted by user",
-                "Out_boolWorkcompleted": False}
+        return {
+            "Out_strWorkExceptionMessage": "Interrupted by user",
+            "Out_boolWorkcompleted": False,
+        }
 
     except FlowError as fe:
         lg.exception("FlowError")
-        return {"Out_strWorkExceptionMessage": str(fe),
-                "Out_boolWorkcompleted": fe.work_completed}
+        return {
+            "Out_strWorkExceptionMessage": str(fe),
+            "Out_boolWorkcompleted": fe.work_completed,
+        }
 
     except Exception as ex:
         lg.exception("Unexpected")
-        return {"Out_strWorkExceptionMessage": f"Unexpected error: {ex}",
-                "Out_boolWorkcompleted": False}
+        return {
+            "Out_strWorkExceptionMessage": f"Unexpected error: {ex}",
+            "Out_boolWorkcompleted": False,
+        }
 
     finally:
         kill_orphan_excels()
@@ -353,11 +357,7 @@ def _cli():
     ap = argparse.ArgumentParser()
     ap.add_argument("json_file")
     p = ap.parse_args()
-    raw = (
-        sys.stdin.read()
-        if p.json_file == "-"
-        else Path(p.json_file).read_text()
-    )
+    raw = sys.stdin.read() if p.json_file == "-" else Path(p.json_file).read_text()
     print(json.dumps(run_flow(json.loads(raw)), indent=2))
 
 
