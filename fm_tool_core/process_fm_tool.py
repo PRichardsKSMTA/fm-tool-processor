@@ -101,11 +101,17 @@ def wait_ready(wb: xw.Book, lg: logging.Logger):
         if flag == READY_ERR:
             raise FlowError("VBA signalled ERROR", work_completed=False)
         if elapsed >= READY_TO:
-            raise FlowError("Timeout waiting for READY flag", work_completed=False)
+            raise FlowError(
+                "Timeout waiting for READY flag",
+                work_completed=False,
+            )
         time.sleep(POLL)
 
 
-def open_with_timeout(path: Path, lg: logging.Logger) -> tuple[xw.App, xw.Book]:
+def open_with_timeout(
+    path: Path,
+    lg: logging.Logger,
+) -> tuple[xw.App, xw.Book]:
     lg.info("Creating Excel App …")
     app = xw.App(visible=False, add_book=False)
     app.api.Application.DisplayAlerts = False
@@ -210,7 +216,11 @@ def sharepoint_upload(ctx, folder, fname, local: Path):
 
 # -------------------- WORK UNIT ------------------------------------------ #
 def process_row(
-    it: Dict[str, Any], upload: bool, root: str, run_id: str, lg: logging.Logger
+    it: Dict[str, Any],
+    upload: bool,
+    root: str,
+    run_id: str,
+    lg: logging.Logger,
 ):
     unique_name = f"{Path(it['NEW_EXCEL_FILENAME']).stem}_{run_id}.xlsm"
     dst = copy_template(it["TOOL_TEMPLATE_FILEPATH"], root, unique_name, lg)
@@ -237,11 +247,17 @@ def process_row(
         it["ORDERAREAS_VALIDATION_COLUMN"],
         it["ORDERAREAS_VALIDATION_ROW"],
     )
+    cell_ref = "".join(
+        [
+            f"{it['ORDERAREAS_VALIDATION_COLUMN']}",
+            f"{it['ORDERAREAS_VALIDATION_ROW']}",
+        ]
+    )
     lg.info(
         "Validation: %s=%s, %s=%s",
         f"{it['SCAC_VALIDATION_COLUMN']}{it['SCAC_VALIDATION_ROW']}",
         op,
-        (f"{it['ORDERAREAS_VALIDATION_COLUMN']}" f"{it['ORDERAREAS_VALIDATION_ROW']}"),
+        cell_ref,
         oa,
     )
     if op != it["SCAC_OPP"]:
@@ -288,10 +304,14 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
     lg = logging.getLogger("fm_tool")
     lg.setLevel(logging.INFO)
     lg.handlers.clear()
-    for h in (logging.StreamHandler(), logging.FileHandler(log_file, encoding="utf-8")):
+    for h in (
+        logging.StreamHandler(),
+        logging.FileHandler(log_file, encoding="utf-8"),
+    ):
         h.setFormatter(
             logging.Formatter(
-                "%(asctime)s | %(levelname)s | %(message)s", "%Y-%m-%dT%H:%M:%SZ"
+                "%(asctime)s | %(levelname)s | %(message)s",
+                "%Y-%m-%dT%H:%M:%SZ",
             )
         )
         lg.addHandler(h)
@@ -357,7 +377,10 @@ def _cli():
     ap = argparse.ArgumentParser()
     ap.add_argument("json_file")
     p = ap.parse_args()
-    raw = sys.stdin.read() if p.json_file == "-" else Path(p.json_file).read_text()
+    if p.json_file == "-":
+        raw = sys.stdin.read()
+    else:
+        raw = Path(p.json_file).read_text()
     print(json.dumps(run_flow(json.loads(raw)), indent=2))
 
 
