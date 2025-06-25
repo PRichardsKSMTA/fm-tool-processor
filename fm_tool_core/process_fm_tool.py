@@ -35,6 +35,7 @@ from office365.sharepoint.client_context import ClientContext
 try:
     from win32com.client import pythoncom  # type: ignore
 except Exception:  # pragma: no cover
+
     class _PC:
         @staticmethod
         def PumpWaitingMessages(): ...
@@ -42,6 +43,7 @@ except Exception:  # pragma: no cover
         def CoInitialize(): ...
         @staticmethod
         def CoUninitialize(): ...
+
     pythoncom = _PC()
 
 # ---------- CONSTANTS ---------------------------------------------------- #
@@ -79,8 +81,7 @@ def kill_orphan_excels():
                 pass
 
 
-def copy_template(src: str, dst_root: str, new_name: str,
-                  log: logging.Logger) -> Path:
+def copy_template(src: str, dst_root: str, new_name: str, log: logging.Logger) -> Path:
     src_path = Path(src)
     if not src_path.exists():
         raise FlowError(f"Template not found: {src}", work_completed=False)
@@ -128,8 +129,7 @@ def wait_ready(wb: xw.Book, log: logging.Logger):
         time.sleep(POLL_SLEEP)
 
 
-def _open_excel_with_timeout(path: Path, log: logging.Logger
-                             ) -> tuple[xw.App, xw.Book]:
+def _open_excel_with_timeout(path: Path, log: logging.Logger) -> tuple[xw.App, xw.Book]:
     log.info("Creating Excel App …")
     app = xw.App(visible=VISIBLE_EXCEL, add_book=False)
     app.api.DisplayFullScreen = False
@@ -215,10 +215,12 @@ def read_cell(wb_path: Path, col: str, row: str) -> Any:
     return value
 
 
-def sp_ctx(_: str = None):
+def sp_ctx(site_url: str | None = None):
     if not (SP_USERNAME and SP_PASSWORD):
         raise FlowError("SharePoint credentials missing", work_completed=False)
-    return ClientContext(ROOT_SP_SITE).with_credentials(
+
+    base = site_url.rstrip("/") if site_url else ROOT_SP_SITE
+    return ClientContext(base).with_credentials(
         UserCredential(SP_USERNAME, SP_PASSWORD)
     )
 
@@ -239,8 +241,9 @@ def sp_upload(ctx, folder: str, fname: str, local: Path):
 
 
 # -------------------- ROW PROCESSOR -------------------------------------- #
-def process_row(row: Dict[str, Any], upload: bool, root: str,
-                run_id: str, log: logging.Logger):
+def process_row(
+    row: Dict[str, Any], upload: bool, root: str, run_id: str, log: logging.Logger
+):
     dst_name = f"{Path(row['NEW_EXCEL_FILENAME']).stem}_{run_id}.xlsm"
     dst_path = copy_template(row["TOOL_TEMPLATE_FILEPATH"], root, dst_name, log)
     log.info("Template copied to %s", dst_path)
@@ -252,20 +255,33 @@ def process_row(row: Dict[str, Any], upload: bool, root: str,
     )
 
     log.info("Reading validation cells …")
-    op_val = read_cell(dst_path, row["SCAC_VALIDATION_COLUMN"], row["SCAC_VALIDATION_ROW"])
-    oa_val = read_cell(dst_path, row["ORDERAREAS_VALIDATION_COLUMN"], row["ORDERAREAS_VALIDATION_ROW"])
+    op_val = read_cell(
+        dst_path, row["SCAC_VALIDATION_COLUMN"], row["SCAC_VALIDATION_ROW"]
+    )
+    oa_val = read_cell(
+        dst_path, row["ORDERAREAS_VALIDATION_COLUMN"], row["ORDERAREAS_VALIDATION_ROW"]
+    )
 
-    log.info("Validation: %s=%s, %s=%s",
-             f"{row['SCAC_VALIDATION_COLUMN']}{row['SCAC_VALIDATION_ROW']}", op_val,
-             f"{row['ORDERAREAS_VALIDATION_COLUMN']}{row['ORDERAREAS_VALIDATION_ROW']}", oa_val)
+    log.info(
+        "Validation: %s=%s, %s=%s",
+        f"{row['SCAC_VALIDATION_COLUMN']}{row['SCAC_VALIDATION_ROW']}",
+        op_val,
+        f"{row['ORDERAREAS_VALIDATION_COLUMN']}{row['ORDERAREAS_VALIDATION_ROW']}",
+        oa_val,
+    )
 
     if op_val != row["SCAC_OPP"]:
-        raise FlowError(f"Validation failed – expected {row['SCAC_OPP']} got {op_val}", work_completed=False)
+        raise FlowError(
+            f"Validation failed – expected {row['SCAC_OPP']} got {op_val}",
+            work_completed=False,
+        )
     if oa_val == row["ORDERAREAS_VALIDATION_VALUE"]:
-        raise FlowError("Validation failed – ORDER/AREA unchanged", work_completed=False)
+        raise FlowError(
+            "Validation failed – ORDER/AREA unchanged", work_completed=False
+        )
 
     if upload:
-        ctx = sp_ctx()
+        ctx = sp_ctx(row["CLIENT_DEST_SITE"])
         site_path = urlparse(row["CLIENT_DEST_SITE"]).path
         folder_name = row["CLIENT_DEST_FOLDER_PATH"].lstrip("/")
         # build a forward-slash server-relative URL
@@ -276,7 +292,7 @@ def process_row(row: Dict[str, Any], upload: bool, root: str,
         if sp_exists(ctx, rel_file):
             log.warning("File exists on SharePoint – skip upload")
         else:
-            sp_upload(ctx, folder_rel, row['NEW_EXCEL_FILENAME'], dst_path)
+            sp_upload(ctx, folder_rel, row["NEW_EXCEL_FILENAME"], dst_path)
             log.info("Uploaded %s", rel_file)
 
     dst_path.unlink(missing_ok=True)
@@ -298,12 +314,14 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
     log_file = LOG_DIR / f"{datetime.utcnow():%Y-%m-%d-%H-%M-%S}_{run_id}.log"
 
     log = logging.getLogger("fm_tool")
-    log.setLevel(logging.INFO)  
+    log.setLevel(logging.INFO)
     log.handlers.clear()
-    for h in (logging.StreamHandler(),
-              logging.FileHandler(log_file, encoding="utf-8")):
-        h.setFormatter(logging.Formatter(
-            "%(asctime)s | %(levelname)s | %(message)s", "%Y-%m-%dT%H:%M:%SZ"))
+    for h in (logging.StreamHandler(), logging.FileHandler(log_file, encoding="utf-8")):
+        h.setFormatter(
+            logging.Formatter(
+                "%(asctime)s | %(levelname)s | %(message)s", "%Y-%m-%dT%H:%M:%SZ"
+            )
+        )
         log.addHandler(h)
 
     log.info("----- FM Tool run %s -----", run_id)
@@ -320,8 +338,13 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
                 except Exception as e:
                     if attempts >= max_retry:
                         raise
-                    log.warning("Retry %s/%s after %s: %s", 
-                                attempts, max_retry, e.__class__.__name__, e)
+                    log.warning(
+                        "Retry %s/%s after %s: %s",
+                        attempts,
+                        max_retry,
+                        e.__class__.__name__,
+                        e,
+                    )
                     kill_orphan_excels()
                     time.sleep(RETRY_SLEEP)
 
@@ -330,17 +353,24 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     except KeyboardInterrupt:
         log.error("Interrupted by user")
-        return {"Out_strWorkExceptionMessage": "Interrupted by user",
-                "Out_boolWorkcompleted": False}
+        return {
+            "Out_strWorkExceptionMessage": "Interrupted by user",
+            "Out_boolWorkcompleted": False,
+        }
 
     except FlowError as fe:
         log.exception("FlowError encountered")
-        return {"Out_strWorkExceptionMessage": str(fe), "Out_boolWorkcompleted": fe.work_completed}
+        return {
+            "Out_strWorkExceptionMessage": str(fe),
+            "Out_boolWorkcompleted": fe.work_completed,
+        }
 
     except Exception as ex:
         log.exception("Unexpected exception")
-        return {"Out_strWorkExceptionMessage": f"Unexpected error: {ex}",
-                "Out_boolWorkcompleted": False}
+        return {
+            "Out_strWorkExceptionMessage": f"Unexpected error: {ex}",
+            "Out_boolWorkcompleted": False,
+        }
 
     finally:
         kill_orphan_excels()
@@ -354,8 +384,9 @@ def _cli() -> None:
     ap.add_argument("json_file", help="Payload file path or '-' for stdin")
     args = ap.parse_args()
 
-    raw_json = (sys.stdin.read() if args.json_file == "-"
-                else Path(args.json_file).read_text())
+    raw_json = (
+        sys.stdin.read() if args.json_file == "-" else Path(args.json_file).read_text()
+    )
     result = run_flow(json.loads(raw_json))
     print(json.dumps(result, indent=2))
 
