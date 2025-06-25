@@ -51,6 +51,10 @@ coverage.xml
 .pytest_cache/
 cover/
 
+# Logs & runtime artifacts
+logs/
+*.log
+
 # Translations
 *.mo
 *.pot
@@ -193,3 +197,4 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+.python_packages

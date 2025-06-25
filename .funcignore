@@ -1,2 +1,12 @@
+# Exclude non-runtime content from zip-deploy
+.git*
+.github/
+tests/
+*.pyc
+__pycache__/
 .env
-local.settings.json
+*.log
+.idea/
+.vscode/
+
+.venv

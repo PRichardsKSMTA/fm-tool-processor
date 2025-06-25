@@ -1,0 +1,28 @@
+{
+    "uiFlowId": "465862e5-2795-ef11-8a6a-000d3a5952e8",
+    "runMode": "unattended",
+    "item/In_intMaxRetry": 3,
+    "item/In_strDestinationProcessingFolder": "C:\\Users\\pete.richards\\OneDrive - KSM Business Services Inc\\Desktop",
+    "item/In_dtInputData": [
+        {
+            "SCAC_OPP": "XTTL_REF",
+            "CLIENT_SCAC": "XTTL",
+            "KSMTA_DEST_SITE": "https://ksmcpa.sharepoint.com/teams/KSMTA",
+            "KSMTA_DEST_FOLDER_PATH": "NA",
+            "CLIENT_DEST_SITE": "https://ksmcpa.sharepoint.com/sites/KSMTA_XTTL",
+            "CLIENT_DEST_FOLDER_PATH": "/Client  Downloads/Pricing Tools",
+            "FM_TOOL": "PIT",
+            "TOOL_TEMPLATE_FILEPATH": "C:\\Users\\pete.richards\\OneDrive - KSM Business Services Inc\\Desktop\\SCAC_OPN - YYYYMMDD PIT OR (7).xlsm",
+            "NEW_EXCEL_FILENAME": "XTTL_REF - 2025-06-21 PIT 12wk.xlsm",
+            "WEEK_CT": "12",
+            "PROCESSING_WEEK": "2025-06-21",
+            "SCAC_VALIDATION_COLUMN": "O",
+            "SCAC_VALIDATION_ROW": "4",
+            "ORDERAREAS_VALIDATION_COLUMN": "A",
+            "ORDERAREAS_VALIDATION_ROW": "10",
+            "ORDERAREAS_VALIDATION_VALUE": "Input <> Order/Area"
+        }
+    ],
+    "item/In_boolEnableSharePointUpload": true,
+    "x-ms-flow-trusted-access": true
+}

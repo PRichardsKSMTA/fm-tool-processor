@@ -1,0 +1,11 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "SP_USERNAME": "user@tenant.onmicrosoft.com",
+    "SP_PASSWORD": "your-app-password",
+    "SP_CHUNK_MB": "10",
+    "LOG_DIR": "./logs"
+  }
+}
