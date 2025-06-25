@@ -9,12 +9,21 @@ Stable Excel automation.
 """
 
 from __future__ import annotations
-import argparse, json, logging, os, shutil, sys, time, uuid
+
+import argparse
+import json
+import logging
+import os
+import shutil
+import sys
+import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
-import psutil, xlwings as xw
+import psutil
+import xlwings as xw
 from office365.runtime.auth.user_credential import UserCredential
 from office365.sharepoint.client_context import ClientContext
 from types import SimpleNamespace
@@ -38,15 +47,19 @@ class FlowError(Exception):
     def __init__(self, msg: str, *, work_completed: bool = False) -> None:
         super().__init__(msg)
         self.work_completed = work_completed
-    def __str__(self) -> str: return self.args[0]
+
+    def __str__(self) -> str:
+        return self.args[0]
 
 
 # -------------------- HELPERS -------------------------------------------- #
 def kill_orphan_excels():
     for p in psutil.process_iter(attrs=["name"]):
         if p.info["name"] and p.info["name"].lower().startswith("excel"):
-            try: p.kill()
-            except Exception: pass
+            try:
+                p.kill()
+            except Exception:
+                pass
 
 
 def copy_template(src: str, root: str, name: str, lg: logging.Logger) -> Path:
@@ -62,8 +75,10 @@ def copy_template(src: str, root: str, name: str, lg: logging.Logger) -> Path:
         shutil.copy2(src_path, dst)
     except PermissionError:
         lg.warning("Destination locked; unlinking and retrying copy")
-        try: dst.unlink()
-        except Exception: pass
+        try:
+            dst.unlink()
+        except Exception:
+            pass
         shutil.copy2(src_path, dst)
 
     return dst
@@ -85,11 +100,15 @@ def wait_ready(wb: xw.Book, lg: logging.Logger):
         if flag == READY_ERR:
             raise FlowError("VBA signalled ERROR", work_completed=False)
         if elapsed >= READY_TO:
-            raise FlowError("Timeout waiting for READY flag", work_completed=False)
+            raise FlowError(
+                "Timeout waiting for READY flag", work_completed=False
+            )
         time.sleep(POLL)
 
 
-def open_with_timeout(path: Path, lg: logging.Logger) -> tuple[xw.App, xw.Book]:
+def open_with_timeout(
+    path: Path, lg: logging.Logger
+) -> tuple[xw.App, xw.Book]:
     lg.info("Creating Excel App …")
     app = xw.App(visible=False, add_book=False)
     app.api.Application.DisplayAlerts = False
@@ -103,9 +122,13 @@ def open_with_timeout(path: Path, lg: logging.Logger) -> tuple[xw.App, xw.Book]:
         except Exception as e:
             if time.time() - t0 > OPEN_TO:
                 lg.error("Excel open timed-out after %s s", OPEN_TO)
-                try: app.kill()
-                except Exception: pass
-                raise FlowError(f"Excel failed to open workbook: {e}", work_completed=False)
+                try:
+                    app.kill()
+                except Exception:
+                    pass
+                raise FlowError(
+                    f"Excel failed to open workbook: {e}", work_completed=False
+                )
             pythoncom.PumpWaitingMessages()
             time.sleep(0.5)
 
@@ -120,8 +143,10 @@ def run_macro(dst: Path, args: tuple, lg: logging.Logger):
         lg.info("Workbook saved")
     finally:
         for op in (wb.close, app.kill):
-            try: op()
-            except Exception: pass
+            try:
+                op()
+            except Exception:
+                pass
 
 
 # Backwards compatibility with older code/tests
@@ -137,8 +162,10 @@ def read_cell(path: Path, col: str, row: str):
         val = wb.sheets[0].range(f"{col}{row}").value
     finally:
         for op in (wb.close, app.kill):
-            try: op()
-            except Exception: pass
+            try:
+                op()
+            except Exception:
+                pass
     return val
 
 
@@ -191,15 +218,36 @@ def process_row(it: Dict[str, Any], upload: bool, root: str,
     dst = copy_template(it["TOOL_TEMPLATE_FILEPATH"], root, unique_name, lg)
     lg.info("Template copied to %s", dst)
 
-    run_excel_macro(dst, (it["SCAC_OPP"], it["WEEK_CT"], it["PROCESSING_WEEK"]), lg)
+    run_excel_macro(
+        dst,
+        (
+            it["SCAC_OPP"],
+            it["WEEK_CT"],
+            it["PROCESSING_WEEK"],
+        ),
+        lg,
+    )
 
     lg.info("Reading validation cells …")
-    op = read_cell(dst, it["SCAC_VALIDATION_COLUMN"], it["SCAC_VALIDATION_ROW"])
-    oa = read_cell(dst, it["ORDERAREAS_VALIDATION_COLUMN"], it["ORDERAREAS_VALIDATION_ROW"])
+    op = read_cell(
+        dst,
+        it["SCAC_VALIDATION_COLUMN"],
+        it["SCAC_VALIDATION_ROW"],
+    )
+    oa = read_cell(
+        dst,
+        it["ORDERAREAS_VALIDATION_COLUMN"],
+        it["ORDERAREAS_VALIDATION_ROW"],
+    )
     lg.info(
         "Validation: %s=%s, %s=%s",
-        f"{it['SCAC_VALIDATION_COLUMN']}{it['SCAC_VALIDATION_ROW']}", op,
-        f"{it['ORDERAREAS_VALIDATION_COLUMN']}{it['ORDERAREAS_VALIDATION_ROW']}", oa,
+        f"{it['SCAC_VALIDATION_COLUMN']}{it['SCAC_VALIDATION_ROW']}",
+        op,
+        (
+            f"{it['ORDERAREAS_VALIDATION_COLUMN']}"
+            f"{it['ORDERAREAS_VALIDATION_ROW']}"
+        ),
+        oa,
     )
     if op != it["SCAC_OPP"]:
         raise FlowError(
@@ -216,7 +264,12 @@ def process_row(it: Dict[str, Any], upload: bool, root: str,
         if sp_exists(ctx, rel_file):
             lg.warning("File exists on SharePoint – skip upload")
         else:
-            sp_upload(ctx, f"/sites/{rel_folder}", it["NEW_EXCEL_FILENAME"], dst)
+            sp_upload(
+                ctx,
+                f"/sites/{rel_folder}",
+                it["NEW_EXCEL_FILENAME"],
+                dst,
+            )
             lg.info("Uploaded %s", rel_file)
 
     dst.unlink(missing_ok=True)
@@ -238,7 +291,8 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
     log_file = LOG_DIR / f"{datetime.utcnow():%Y-%m-%d-%H-%M-%S}_{run_id}.log"
 
     lg = logging.getLogger("fm_tool")
-    lg.setLevel(logging.INFO); lg.handlers.clear()
+    lg.setLevel(logging.INFO)
+    lg.handlers.clear()
     for h in (logging.StreamHandler(),
               logging.FileHandler(log_file, encoding="utf-8")):
         h.setFormatter(
@@ -269,7 +323,10 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
                     time.sleep(RETRY_SLEEP)
 
         lg.info("SUCCESS")
-        return {"Out_strWorkExceptionMessage": "", "Out_boolWorkcompleted": True}
+        return {
+            "Out_strWorkExceptionMessage": "",
+            "Out_boolWorkcompleted": True,
+        }
 
     except KeyboardInterrupt:
         lg.error("Interrupted by user")
@@ -293,9 +350,14 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 # -------------------- CLI ------------------------------------------------- #
 def _cli():
-    ap = argparse.ArgumentParser(); ap.add_argument("json_file")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("json_file")
     p = ap.parse_args()
-    raw = sys.stdin.read() if p.json_file == "-" else Path(p.json_file).read_text()
+    raw = (
+        sys.stdin.read()
+        if p.json_file == "-"
+        else Path(p.json_file).read_text()
+    )
     print(json.dumps(run_flow(json.loads(raw)), indent=2))
 
 
