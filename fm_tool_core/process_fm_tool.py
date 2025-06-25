@@ -7,7 +7,7 @@ Stable Excel automation for FM-Tool processing
 • Unique working filename per run
 • Step-level logging, open/macro time-outs
 • Ctrl-C responsive
-• READY-flag normalisation (=READY → READY) so polling exits correctly
+• READY-flag normalization (=READY → READY) so polling exits correctly
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
+from urllib.parse import urlparse
 
 import psutil
 import xlwings as xw
@@ -48,13 +49,13 @@ READY_NAME, READY_OK, READY_ERR = "PY_READY_FLAG", "READY", "ERROR"
 READY_TO, OPEN_TO, POLL_SLEEP, RETRY_SLEEP = 600, 60, 0.25, 2  # seconds
 LOG_DIR = Path(os.getenv("LOG_DIR", "./logs")).resolve()
 SP_USERNAME, SP_PASSWORD = os.getenv("SP_USERNAME"), os.getenv("SP_PASSWORD")
-SP_CHUNK = int(os.getenv("SP_CHUNK_MB", "10")) * 1024 * 1024
-SCAC_VALIDATION_SHEET = "HOME"
+# The site collection under which our service account lives
 ROOT_SP_SITE = "https://ksmcpa.sharepoint.com/teams/ksmta"
-
-# ------------------------------------------------------------------------ #
-
+# Sheet that holds the validation cells
+SCAC_VALIDATION_SHEET = "HOME"
+# Show the Excel UI when FM_SHOW_EXCEL=1
 VISIBLE_EXCEL = os.getenv("FM_SHOW_EXCEL", "0") == "1"
+# ------------------------------------------------------------------------ #
 
 
 class FlowError(Exception):
@@ -65,7 +66,7 @@ class FlowError(Exception):
         self.work_completed = work_completed
 
     def __str__(self) -> str:
-        return self.args[0]  # cleaner JSON
+        return self.args[0]
 
 
 # -------------------- PROCESS HELPERS ----------------------------------- #
@@ -107,21 +108,21 @@ def wait_ready(wb: xw.Book, log: logging.Logger):
     while True:
         try:
             ref = wb.names[READY_NAME].refers_to
-            if ref.startswith("="):           # ='READY'  or  =READY
+            if ref.startswith("="):  # e.g. ="READY" or =READY
                 ref = ref[1:]
             flag = ref.strip('"').strip()
         except Exception:
             flag = "<not-set>"
 
         elapsed = int(time.time() - start)
-        if elapsed != last_log:               # throttle to 1 msg / sec
+        if elapsed != last_log:
             log.info("Polling flag: %s (t=%ss)", flag, elapsed)
             last_log = elapsed
 
         if flag == READY_OK:
             return
         if flag == READY_ERR:
-            raise FlowError("VBA signalled ERROR", work_completed=False)
+            raise FlowError("VBA signaled ERROR", work_completed=False)
         if elapsed >= READY_TO:
             raise FlowError("Timeout waiting for READY flag", work_completed=False)
         time.sleep(POLL_SLEEP)
@@ -131,6 +132,7 @@ def _open_excel_with_timeout(path: Path, log: logging.Logger
                              ) -> tuple[xw.App, xw.Book]:
     log.info("Creating Excel App …")
     app = xw.App(visible=VISIBLE_EXCEL, add_book=False)
+    app.api.DisplayFullScreen = False
     app.api.Application.DisplayAlerts = False
 
     log.info("Opening workbook …")
@@ -141,12 +143,12 @@ def _open_excel_with_timeout(path: Path, log: logging.Logger
             return app, book
         except Exception as e:
             if time.time() - t0 > OPEN_TO:
-                log.error("Excel open timed-out after %s s", OPEN_TO)
+                log.error("Excel open timed out after %s s", OPEN_TO)
                 try:
                     app.kill()
                 except Exception:
                     pass
-                raise FlowError(f"Excel failed to open workbook: {e}", work_completed=False)
+                raise FlowError(f"Excel failed to open workbook: {e}", False)
             pythoncom.PumpWaitingMessages()
             time.sleep(0.5)
 
@@ -157,6 +159,7 @@ def _run_macro_impl(wb_path: Path, args: tuple, log: logging.Logger):
         log.info("Running macro PopulateAndRunReport …")
         wb.macro("PopulateAndRunReport")(*args)
         wait_ready(wb, log)
+        wb.api.Application.CalculateFull()
         wb.save()
         log.info("Workbook saved")
     finally:
@@ -168,7 +171,6 @@ def _run_macro_impl(wb_path: Path, args: tuple, log: logging.Logger):
 
 
 def run_macro(wb_path: Path, args: tuple, log: logging.Logger):
-    """Run VBA in worker thread so Ctrl-C is responsive; hard-kill after READY_TO."""
     exc: list[Exception] = []
 
     def _worker():
@@ -188,7 +190,7 @@ def run_macro(wb_path: Path, args: tuple, log: logging.Logger):
 
     start = time.time()
     while th.is_alive():
-        time.sleep(0.5)                       # allows KeyboardInterrupt
+        time.sleep(0.5)
         if time.time() - start > READY_TO:
             log.error("Macro exceeded %s s – killing Excel", READY_TO)
             kill_orphan_excels()
@@ -198,10 +200,11 @@ def run_macro(wb_path: Path, args: tuple, log: logging.Logger):
         raise exc[0]
 
 
-def read_cell(path: Path, col: str, row: str):
+def read_cell(wb_path: Path, col: str, row: str) -> Any:
     app = xw.App(visible=VISIBLE_EXCEL, add_book=False)
+    app.api.DisplayFullScreen = False
     try:
-        wb = app.books.open(str(path))
+        wb = app.books.open(str(wb_path))
         value = wb.sheets[SCAC_VALIDATION_SHEET].range(f"{col}{row}").value
     finally:
         for op in (wb.close, app.kill):
@@ -213,17 +216,11 @@ def read_cell(path: Path, col: str, row: str):
 
 
 def sp_ctx(_: str = None):
-    """
-    Authenticate _only_ against the ROOT_SP_SITE.
-    The client sub-site path (e.g. /sites/KSMTA_HUMD) is used later for upload.
-    """
     if not (SP_USERNAME and SP_PASSWORD):
         raise FlowError("SharePoint credentials missing", work_completed=False)
     return ClientContext(ROOT_SP_SITE).with_credentials(
         UserCredential(SP_USERNAME, SP_PASSWORD)
     )
-
-
 
 
 def sp_exists(ctx, rel_url: str) -> bool:
@@ -237,19 +234,11 @@ def sp_exists(ctx, rel_url: str) -> bool:
 def sp_upload(ctx, folder: str, fname: str, local: Path):
     tgt = ctx.web.get_folder_by_server_relative_url(folder)
     with local.open("rb") as f:
-        size = os.fstat(f.fileno()).st_size
-        if size <= SP_CHUNK:
-            tgt.upload_file(fname, f.read()).execute_query()
-        else:
-            sess = tgt.files.create_upload_session(fname, size).execute_query()
-            off = 0
-            while off < size:
-                chunk = f.read(SP_CHUNK)
-                sess.upload_chunk(chunk, off, len(chunk)).execute_query()
-                off += len(chunk)
+        content = f.read()
+    tgt.upload_file(fname, content).execute_query()
 
 
-# -------------------- ROW PROCESSOR ------------------------------------- #
+# -------------------- ROW PROCESSOR -------------------------------------- #
 def process_row(row: Dict[str, Any], upload: bool, root: str,
                 run_id: str, log: logging.Logger):
     dst_name = f"{Path(row['NEW_EXCEL_FILENAME']).stem}_{run_id}.xlsm"
@@ -276,20 +265,25 @@ def process_row(row: Dict[str, Any], upload: bool, root: str,
         raise FlowError("Validation failed – ORDER/AREA unchanged", work_completed=False)
 
     if upload:
-        ctx = sp_ctx(row["CLIENT_DEST_SITE"])
-        rel_folder = Path(row["CLIENT_DEST_FOLDER_PATH"]).as_posix().lstrip("/")
-        rel_file = f"/sites/{rel_folder}/{row['NEW_EXCEL_FILENAME']}"
+        ctx = sp_ctx()
+        site_path = urlparse(row["CLIENT_DEST_SITE"]).path
+        folder_name = row["CLIENT_DEST_FOLDER_PATH"].lstrip("/")
+        # build a forward-slash server-relative URL
+        folder_rel = (Path(site_path) / folder_name).as_posix()
+        rel_file = f"{folder_rel}/{row['NEW_EXCEL_FILENAME']}"
+
+        log.info("DEBUG: Uploading to server-relative folder %s", folder_rel)
         if sp_exists(ctx, rel_file):
             log.warning("File exists on SharePoint – skip upload")
         else:
-            sp_upload(ctx, f"/sites/{rel_folder}", row["NEW_EXCEL_FILENAME"], dst_path)
+            sp_upload(ctx, folder_rel, row['NEW_EXCEL_FILENAME'], dst_path)
             log.info("Uploaded %s", rel_file)
 
     dst_path.unlink(missing_ok=True)
     log.info("Local file deleted")
 
 
-# -------------------- MAIN RUNNER --------------------------------------- #
+# -------------------- MAIN RUNNER ---------------------------------------- #
 def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
     if "parameters" in payload and isinstance(payload["parameters"], dict):
         payload = payload["parameters"]
@@ -304,11 +298,12 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
     log_file = LOG_DIR / f"{datetime.utcnow():%Y-%m-%d-%H-%M-%S}_{run_id}.log"
 
     log = logging.getLogger("fm_tool")
-    log.setLevel(logging.INFO); log.handlers.clear()
+    log.setLevel(logging.INFO)  
+    log.handlers.clear()
     for h in (logging.StreamHandler(),
               logging.FileHandler(log_file, encoding="utf-8")):
-        h.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s",
-                                         "%Y-%m-%dT%H:%M:%SZ"))
+        h.setFormatter(logging.Formatter(
+            "%(asctime)s | %(levelname)s | %(message)s", "%Y-%m-%dT%H:%M:%SZ"))
         log.addHandler(h)
 
     log.info("----- FM Tool run %s -----", run_id)
@@ -325,7 +320,7 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
                 except Exception as e:
                     if attempts >= max_retry:
                         raise
-                    log.warning("Retry %s/%s after %s: %s",
+                    log.warning("Retry %s/%s after %s: %s", 
                                 attempts, max_retry, e.__class__.__name__, e)
                     kill_orphan_excels()
                     time.sleep(RETRY_SLEEP)
@@ -338,19 +333,15 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
         return {"Out_strWorkExceptionMessage": "Interrupted by user",
                 "Out_boolWorkcompleted": False}
 
-    # -------- domain-level (expected) errors --------------------------- #
     except FlowError as fe:
         log.exception("FlowError encountered")
-        return {"Out_strWorkExceptionMessage": str(fe),
-                "Out_boolWorkcompleted": fe.work_completed}
+        return {"Out_strWorkExceptionMessage": str(fe), "Out_boolWorkcompleted": fe.work_completed}
 
-    # -------- everything else ----------------------------------------- #
     except Exception as ex:
         log.exception("Unexpected exception")
         return {"Out_strWorkExceptionMessage": f"Unexpected error: {ex}",
                 "Out_boolWorkcompleted": False}
 
-    # -------- always tidy up ------------------------------------------ #
     finally:
         kill_orphan_excels()
         log.info("Log saved to %s", log_file)
