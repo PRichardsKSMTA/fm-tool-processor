@@ -27,8 +27,6 @@ from .sharepoint_utils import (
     sp_ctx,
     sp_exists,
     sp_upload,
-    sharepoint_file_exists,
-    sharepoint_upload,
 )
 
 
@@ -85,7 +83,7 @@ def process_row(
         if sp_exists(ctx, rel_file):
             log.warning("File exists on SharePoint – skip upload")
         else:
-            sp_upload(ctx, folder_rel, row["NEW_EXCEL_FILENAME"], dst_path)
+            sp_upload(ctx, folder_rel, row['NEW_EXCEL_FILENAME'], dst_path)
             log.info("Uploaded %s", rel_file)
 
     dst_path.unlink(missing_ok=True)
@@ -96,12 +94,16 @@ def process_row(
 
 
 def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Processes a batch of rows, capturing individual results so that one failure
+    does not stop the entire process. Returns a summary with per-row statuses.
+    """
     if "parameters" in payload and isinstance(payload["parameters"], dict):
         payload = payload["parameters"]
 
     max_retry = int(payload.get("item/In_intMaxRetry", 3))
     root_folder = payload["item/In_strDestinationProcessingFolder"]
-    rows: List[Dict] = payload["item/In_dtInputData"]
+    rows: List[Dict[str, Any]] = payload["item/In_dtInputData"]
     enable_upload = payload.get("item/In_boolEnableSharePointUpload", True)
 
     run_id = uuid.uuid4().hex[:8]
@@ -122,13 +124,23 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
     log.info("----- FM Tool run %s -----", run_id)
     kill_orphan_excels()
 
-    try:
-        for row in rows:
-            attempts = 0
+    results: List[Dict[str, Any]] = []
+
+    for row in rows:
+        identifier = row.get('NEW_EXCEL_FILENAME', 'unknown')
+        row_result: Dict[str, Any] = {
+            'file': identifier,
+            'status': 'running',
+            'error': ''
+        }
+        results.append(row_result)
+        attempts = 0
+        try:
             while True:
                 attempts += 1
                 try:
                     process_row(row, enable_upload, root_folder, run_id, log)
+                    row_result['status'] = 'success'
                     break
                 except Exception as e:
                     if attempts >= max_retry:
@@ -142,39 +154,38 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
                     )
                     kill_orphan_excels()
                     time.sleep(RETRY_SLEEP)
+        except FlowError as fe:
+            log.error("Row %s failed: %s", identifier, fe)
+            row_result['status'] = 'failed'
+            row_result['error'] = str(fe)
+        except Exception as ex:
+            log.error("Unexpected error on row %s: %s", identifier, ex)
+            row_result['status'] = 'failed'
+            row_result['error'] = f"Unexpected error: {ex}"
 
-        log.info("SUCCESS")
-        return {"Out_strWorkExceptionMessage": "", "Out_boolWorkcompleted": True}
+    # Determine overall completion: true if all succeeded
+    work_completed = all(r['status'] == 'success' for r in results)
+    # Build summary message
+    if work_completed:
+        summary_msg = ''
+        log.info("All rows completed successfully.")
+    else:
+        summary_msg = 'One or more rows failed; check Out_dtRowResults for details'
+        log.warning(summary_msg)
 
-    except KeyboardInterrupt:
-        log.error("Interrupted by user")
-        return {
-            "Out_strWorkExceptionMessage": "Interrupted by user",
-            "Out_boolWorkcompleted": False,
-        }
+    # Final cleanup
+    kill_orphan_excels()
+    log.info("Log saved to %s", log_file)
+    log.info("----- FM Tool run %s ended -----", run_id)
 
-    except FlowError as fe:
-        log.exception("FlowError encountered")
-        return {
-            "Out_strWorkExceptionMessage": str(fe),
-            "Out_boolWorkcompleted": fe.work_completed,
-        }
-
-    except Exception as ex:
-        log.exception("Unexpected exception")
-        return {
-            "Out_strWorkExceptionMessage": f"Unexpected error: {ex}",
-            "Out_boolWorkcompleted": False,
-        }
-
-    finally:
-        kill_orphan_excels()
-        log.info("Log saved to %s", log_file)
-        log.info("----- FM Tool run %s ended -----", run_id)
+    return {
+        'Out_strWorkExceptionMessage': summary_msg,
+        'Out_boolWorkcompleted': work_completed,
+        'Out_dtRowResults': results,
+    }
 
 
 # -------------------- CLI ------------------------------------------------ #
-
 
 def _cli() -> None:
     ap = argparse.ArgumentParser(description="Run FM Tool processor")
