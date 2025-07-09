@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path  # Work with filesystem paths
 
 from .constants import ROOT_SP_SITE, SP_PASSWORD, SP_USERNAME
 from .exceptions import FlowError
 
 
 def sp_ctx(site_url: str | None = None):
+    # Build a SharePoint client context
     if not (SP_USERNAME and SP_PASSWORD):
         raise FlowError("SharePoint credentials missing", work_completed=False)
 
@@ -23,6 +24,7 @@ def sp_ctx(site_url: str | None = None):
 
 
 def sp_exists(ctx, rel_url: str) -> bool:
+    # Check if a file already exists on SharePoint
     try:
         ctx.web.get_file_by_server_relative_url(rel_url).get().execute_query()
         return True
@@ -31,6 +33,7 @@ def sp_exists(ctx, rel_url: str) -> bool:
 
 
 def sp_upload(ctx, folder: str, fname: str, local: Path):
+    # Upload a local file to a SharePoint folder
     tgt = ctx.web.get_folder_by_server_relative_url(folder)
     with local.open("rb") as f:
         content = f.read()
@@ -41,6 +44,7 @@ def sp_upload(ctx, folder: str, fname: str, local: Path):
 sharepoint_upload = sp_upload
 sharepoint_file_exists = sp_exists
 
+# Exported symbols when importing * from this module
 __all__ = [
     "sp_ctx",
     "sp_exists",
