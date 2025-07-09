@@ -110,7 +110,7 @@ def _open_excel_with_timeout(path: Path, log: logging.Logger):
     if xw is None:
         raise FlowError("xlwings is required", work_completed=False)
     log.info("Creating Excel App …")
-    app = xw.App(visible=VISIBLE_EXCEL, add_book=False)  # type: ignore
+    app = xw.App(visible=True, add_book=False)  # type: ignore
     app.api.DisplayFullScreen = False
     app.api.Application.DisplayAlerts = False
     log.info("Opening workbook …")
