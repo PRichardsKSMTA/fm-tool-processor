@@ -3,12 +3,20 @@
 FM Tool processing entry point – verbose logging & SQL status tracking
 =====================================================================
 
-* Detailed INFO-level log lines (template copy, CPU wait %, validation, upload).
-* BEGIN / COMPLETE / RESET stored-procedure calls via env-vars
-  (SQL_SERVER, SQL_DATABASE, SQL_USERNAME, SQL_PASSWORD).
-  Override proc names with SQL_UPDATE_PROC / SQL_RESET_PROC.
-* Duplicate SharePoint uploads are INFO-level only.
-* `pyodbc` optional – if missing, SQL is skipped but run continues.
+Key behaviour (July 2025)
+────────────────────────
+* **Payload-type detection**
+    • We inspect the `FM_TOOL` column of the first payload row.  
+      ─ `"NIT"`  → NIT run  
+      ─ `"PIT"` *or anything else / missing* → PIT run (default)
+* **Mutually-exclusive status procs** – exactly one `…-BEGIN` at start and one
+  `…-COMPLETE` in the `finally` block.
+* **RESET removed** – `dbo.RESET_CLIENT_PROCESSING_STATUS` exists for legacy
+  reasons but is **never called**.
+* Failed runs are still surfaced to Power Automate, yet marked COMPLETE so
+  they do not auto-retry.
+
+Excel, SharePoint, logging and CLI behaviour remain unchanged.
 """
 from __future__ import annotations
 
@@ -92,8 +100,9 @@ def _update_status(scac: str, state: str,
                (scac, state), log)
 
 
+# RETAINED for completeness – **not used**
 def _reset_status(scac: str, state: str,
-                  log: logging.Logger) -> None:
+                  log: logging.Logger) -> None:  # noqa: F401
     _exec_proc(os.getenv("SQL_RESET_PROC",
                          "dbo.RESET_CLIENT_PROCESSING_STATUS"),
                (scac, state), log)
@@ -138,6 +147,20 @@ def wait_for_cpu(max_percent: float = 80.0,
                         cpu, backoff)
         time.sleep(backoff)
 
+
+def _detect_payload_type(rows: List[Dict[str, Any]]) -> str:
+    """
+    Determine whether the payload is PIT or NIT.
+
+    Logic: read `FM_TOOL` (case-insensitive) from the first row:
+        * "NIT" → NIT
+        * "PIT" *or missing / anything else* → PIT (default)
+    """
+    if not rows:
+        return "PIT"
+    val = str(rows[0].get("FM_TOOL", "")).strip().upper()
+    return "NIT" if val == "NIT" else "PIT"
+
 # ───────────────────────────── ROW WORKER ──────────────────────────────────
 def process_row(row: Dict[str, Any],
                 upload: bool,
@@ -157,7 +180,6 @@ def process_row(row: Dict[str, Any],
     wait_for_cpu(log=log)
     kill_orphan_excels()
 
-    log.info("Creating Excel App …")
     try:
         log.info("Opening workbook …")
         run_excel_macro(dst_path,
@@ -178,8 +200,7 @@ def process_row(row: Dict[str, Any],
                  f"{row['ORDERAREAS_VALIDATION_COLUMN']}{row['ORDERAREAS_VALIDATION_ROW']}",
                  oa_val)
 
-        if op_val != op_code or \
-           oa_val == row["ORDERAREAS_VALIDATION_VALUE"]:
+        if op_val != op_code or oa_val == row["ORDERAREAS_VALIDATION_VALUE"]:
             raise FlowError("Validation failed", work_completed=False)
 
         if upload:
@@ -208,7 +229,7 @@ def process_row(row: Dict[str, Any],
 
 # ───────────────────────────── RUN FLOW ────────────────────────────────────
 def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Main entry when invoked by the PowerShell wrapper."""
+    """Entry point when invoked by the PowerShell wrapper."""
     if "parameters" in payload and isinstance(payload["parameters"], dict):
         payload = payload["parameters"]
 
@@ -234,10 +255,11 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     op_code = rows[0]["SCAC_OPP"]
     scac = op_code.split("_", 1)[0].upper()
+    payload_type = _detect_payload_type(rows)  # 'PIT' or 'NIT'
+    log.info("Detected payload type: %s", payload_type)
 
-    # BEGIN status
-    _update_status(scac, "NIT-BEGIN", log)
-    _update_status(scac, "PIT-BEGIN", log)
+    # BEGIN status (single proc)
+    _update_status(scac, f"{payload_type}-BEGIN", log)
 
     success = False
     try:
@@ -253,9 +275,6 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
                     raise RuntimeError("Max retries reached")
                 time.sleep(RETRY_SLEEP)
 
-        # COMPLETE status
-        _update_status(scac, "NIT-COMPLETE", log)
-        _update_status(scac, "PIT-COMPLETE", log)
         log.info("SUCCESS")
         return {
             "Out_strWorkExceptionMessage": "",
@@ -265,13 +284,18 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     except Exception as exc:
         log.exception("Run failed")
-        _reset_status(scac, "NIT", log)
         return {
             "Out_strWorkExceptionMessage": str(exc),
             "Out_boolWorkcompleted": success,
             "Out_strLogPath": str(log_file),
         }
+
     finally:
+        # COMPLETE status – always executed
+        try:
+            _update_status(scac, f"{payload_type}-COMPLETE", log)
+        except Exception:
+            log.exception("Failed to mark %s-COMPLETE in SQL", payload_type)
         kill_orphan_excels()
         log.info("Log saved to %s", log_file)
 

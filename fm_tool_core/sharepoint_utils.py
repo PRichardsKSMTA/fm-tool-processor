@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .constants import ROOT_SP_SITE, SP_PASSWORD, SP_USERNAME
+from .constants import ROOT_SP_SITE, SP_PASS, SP_USERNAME
 from .exceptions import FlowError
 
 
 def sp_ctx(site_url: str | None = None):
-    if not (SP_USERNAME and SP_PASSWORD):
+    if not (SP_USERNAME and SP_PASS):
         raise FlowError("SharePoint credentials missing", work_completed=False)
 
     base = site_url.rstrip("/") if site_url else ROOT_SP_SITE
@@ -18,7 +18,7 @@ def sp_ctx(site_url: str | None = None):
         raise FlowError(f"SharePoint SDK missing: {exc}", work_completed=False)
 
     return ClientContext(base).with_credentials(
-        UserCredential(SP_USERNAME, SP_PASSWORD)
+        UserCredential(SP_USERNAME, SP_PASS)
     )
 
 

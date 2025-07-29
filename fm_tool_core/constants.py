@@ -15,7 +15,7 @@ RETRY_SLEEP = 2
 LOG_DIR = Path(os.getenv("LOG_DIR", "../Logs")).resolve()
 
 SP_USERNAME = os.getenv("SP_USERNAME")
-SP_PASSWORD = os.getenv("SP_PASSWORD")
+SP_PASS = os.getenv("SP_PASS")
 ROOT_SP_SITE = "https://ksmcpa.sharepoint.com/teams/ksmta"
 
 SCAC_VALIDATION_SHEET = "HOME"
@@ -31,7 +31,7 @@ __all__ = [
     "RETRY_SLEEP",
     "LOG_DIR",
     "SP_USERNAME",
-    "SP_PASSWORD",
+    "SP_PASS",
     "ROOT_SP_SITE",
     "SCAC_VALIDATION_SHEET",
     "VISIBLE_EXCEL",
