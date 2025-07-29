@@ -45,6 +45,10 @@ def insert_bid_rows(
         ws.append([data.get(col, "") for col in _COLUMNS])
 
     wb.save(wb_path)
+    try:
+        wb.close()
+    except Exception:
+        pass
 
 
 __all__ = ["insert_bid_rows"]
