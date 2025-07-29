@@ -18,9 +18,9 @@ The script is intentionally thin: all Excel / SharePoint / SQL logic lives in
 
 from __future__ import annotations
 
-import argparse       # robust CLI parsing
-import json           # read / write JSON
-import sys            # access sys.path & printing
+import argparse  # robust CLI parsing
+import json  # read / write JSON
+import sys  # access sys.path & printing
 from pathlib import Path
 from typing import Any
 
@@ -32,10 +32,13 @@ from dotenv import load_dotenv  # read secrets from .env files
 sys.path.append("C:\\Tasks\\ExcelAutomation\\PythonScript\\fm-tool-processor")
 
 # 2) Load .env **once** so every downstream import can rely on the vars.
-load_dotenv(Path("C:\\Tasks\\ExcelAutomation\\PythonScript\\fm-tool-processor") / ".env")
+load_dotenv(
+    Path("C:\\Tasks\\ExcelAutomation\\PythonScript\\fm-tool-processor") / ".env"
+)
 
 # 3) Import the one public entry point of the FM-Tool engine.
 from fm_tool_core.process_fm_tool import run_flow  # noqa: E402  (after sys.path!)
+
 
 # ────────────────────────────── MAIN PROGRAM ──────────────────────────────
 def main(argv: list[str] | None = None) -> None:
