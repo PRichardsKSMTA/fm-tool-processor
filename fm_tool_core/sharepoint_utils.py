@@ -17,7 +17,9 @@ def sp_ctx(site_url: str | None = None):
     except Exception as exc:  # pragma: no cover - import failure
         raise FlowError(f"SharePoint SDK missing: {exc}", work_completed=False)
 
-    return ClientContext(base).with_credentials(UserCredential(SP_USERNAME, SP_PASS))
+    return ClientContext(base).with_credentials(
+        UserCredential(SP_USERNAME, SP_PASS)
+    )
 
 
 def sp_exists(ctx, rel_url: str) -> bool:

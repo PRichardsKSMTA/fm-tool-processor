@@ -23,46 +23,36 @@ from .exceptions import FlowError
 
 # psutil for killing orphans
 try:
-    import psutil  # type: ignore
+    import psutil # type: ignore
 except ImportError:
-
     class _PS:
         @staticmethod
         def process_iter(attrs=None):
             return []
-
     psutil = _PS()
 
 # xlwings for COM
 try:
-    import xlwings as xw  # type: ignore
+    import xlwings as xw # type: ignore
 except ImportError:
     xw = None  # type: ignore
 
 # win32com for message pumping & CoInitialize
 try:
-    from win32com.client import pythoncom  # type: ignore
+    from win32com.client import pythoncom # type: ignore
 except ImportError:
-
     class _PC:
         @staticmethod
-        def PumpWaitingMessages():
-            pass
-
+        def PumpWaitingMessages(): pass
         @staticmethod
-        def CoInitialize():
-            pass
-
+        def CoInitialize(): pass
         @staticmethod
-        def CoUninitialize():
-            pass
-
+        def CoUninitialize(): pass
     pythoncom = _PC()
 
 # COM error codes to retry on
 RPC_E_CALL_FAILED = -2147023170
 RPC_E_SERVER_UNAVAILABLE = -2147023174
-
 
 def kill_orphan_excels():
     """Force-kill any lingering excel.exe processes."""
@@ -74,7 +64,6 @@ def kill_orphan_excels():
                 logging.info(f"Killed excel.exe (pid={p.pid})")
             except Exception:
                 logging.warning(f"Could not kill excel.exe (pid={p.pid})")
-
 
 def copy_template(src: str, dst_root: str, new_name: str, log: logging.Logger) -> Path:
     src_path = Path(src)
@@ -93,7 +82,6 @@ def copy_template(src: str, dst_root: str, new_name: str, log: logging.Logger) -
             pass
         shutil.copy2(src_path, dst_path)
     return dst_path
-
 
 def wait_ready(wb, log: logging.Logger):
     start = time.time()
@@ -118,7 +106,6 @@ def wait_ready(wb, log: logging.Logger):
             raise FlowError("Timeout waiting for READY flag", work_completed=False)
         time.sleep(POLL_SLEEP)
 
-
 def _open_excel_with_timeout(path: Path, log: logging.Logger):
     if xw is None:
         raise FlowError("xlwings is required", work_completed=False)
@@ -139,12 +126,9 @@ def _open_excel_with_timeout(path: Path, log: logging.Logger):
                     app.kill()
                 except Exception:
                     pass
-                raise FlowError(
-                    f"Excel failed to open workbook: {e}", work_completed=False
-                )
+                raise FlowError(f"Excel failed to open workbook: {e}", work_completed=False)
             pythoncom.PumpWaitingMessages()
             time.sleep(0.5)
-
 
 def safe_run_macro(wb, macro_name: str, args: tuple, log: logging.Logger):
     """
@@ -152,7 +136,6 @@ def safe_run_macro(wb, macro_name: str, args: tuple, log: logging.Logger):
     """
     log.info(f"Running macro {macro_name} …")
     wb.macro(macro_name)(*args)
-
 
 def _run_macro_impl(wb_path: Path, args: tuple, log: logging.Logger):
     app, wb = _open_excel_with_timeout(wb_path, log)
@@ -168,7 +151,6 @@ def _run_macro_impl(wb_path: Path, args: tuple, log: logging.Logger):
                 op()
             except Exception:
                 pass
-
 
 def run_excel_macro(wb_path: Path, args: tuple, log: logging.Logger):
     """
@@ -212,15 +194,12 @@ def run_excel_macro(wb_path: Path, args: tuple, log: logging.Logger):
         hr = getattr(err, "hresult", None)
         log.error(f"Attempt {attempt}/{retries} failed: {err}")
         if hr in (RPC_E_CALL_FAILED, RPC_E_SERVER_UNAVAILABLE) and attempt < retries:
-            log.warning(
-                f"Retrying macro after RPC error (hresult={hr}) in {backoff}s …"
-            )
+            log.warning(f"Retrying macro after RPC error (hresult={hr}) in {backoff}s …")
             time.sleep(backoff)
             continue
 
         # no more retries or fatal error
         raise err
-
 
 def read_cell(wb_path: Path, col: str, row: str) -> Any:
     if xw is None:
@@ -236,7 +215,6 @@ def read_cell(wb_path: Path, col: str, row: str) -> Any:
                 op()
             except Exception:
                 pass
-
 
 __all__ = [
     "kill_orphan_excels",
