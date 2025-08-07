@@ -8,6 +8,8 @@ Mocks heavy external dependencies (Excel & SharePoint) so we can assert that:
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
+
 import fm_tool_core as core
 
 # -------------------- helpers -------------------- #
@@ -19,67 +21,98 @@ def _fake_xlwings_macro(*args, **kwargs):  # noqa: D401
 
 
 class _FakeWorkbook:
-    sheets = [
-        SimpleNamespace(range=lambda x: SimpleNamespace(value="HUMD_VAN")),
-    ]
+    sheets = [SimpleNamespace(range=lambda x: SimpleNamespace(value="HUMD_VAN"))]
 
     def save(self): ...
+
     def close(self): ...
 
 
 # ------------------------------------------------- #
 
 
-def test_run_flow_success(tmp_path, monkeypatch):
+@pytest.fixture
+def payload(tmp_path):
+    tmp_folder = str(tmp_path)
+    return {
+        "item/In_intMaxRetry": 1,
+        "item/In_strDestinationProcessingFolder": tmp_folder,
+        "item/In_dtInputData": [
+            {
+                "SCAC_OPP": "HUMD_VAN",
+                "CLIENT_SCAC": "HUMD",
+                "KSMTA_DEST_SITE": ("https://example." "sharepoint.com"),
+                "KSMTA_DEST_FOLDER_PATH": "/NA",
+                "CLIENT_DEST_SITE": ("https://example." "sharepoint.com"),
+                "CLIENT_DEST_FOLDER_PATH": "/",
+                "FM_TOOL": "PIT",
+                "TOOL_TEMPLATE_FILEPATH": __file__,  # any file
+                "NEW_EXCEL_FILENAME": "dummy.xlsm",
+                "WEEK_CT": "12",
+                "PROCESSING_WEEK": "2025-06-14",
+                "SCAC_VALIDATION_COLUMN": "A",
+                "SCAC_VALIDATION_ROW": "1",
+                "ORDERAREAS_VALIDATION_COLUMN": "B",
+                "ORDERAREAS_VALIDATION_ROW": "1",
+                "ORDERAREAS_VALIDATION_VALUE": ("Input <> " "Order/Area"),
+            }
+        ],
+        "item/In_boolEnableSharePointUpload": False,
+        "BID-Payload": "123e4567-e89b-12d3-a456-426614174000",
+    }
+
+
+def test_run_flow_success(payload):
     """All validations pass -> Out_boolWorkcompleted=True"""
 
-    # -- Patch xlwings + SharePoint functions --
+    bid_rows = [
+        {"Lane ID": 1, "Orig Zip (5 or 3)": "12345", "Dest Zip (5 or 3)": "54321"}
+    ]
     with patch(
         "fm_tool_core.process_fm_tool.run_excel_macro",
         return_value=_FakeWorkbook(),
+    ), patch(
+        "fm_tool_core.process_fm_tool.read_cell",
+        return_value="HUMD_VAN",
+    ), patch(
+        "fm_tool_core.process_fm_tool.sharepoint_upload"
+    ), patch(
+        "fm_tool_core.process_fm_tool.sharepoint_file_exists",
+        return_value=False,
+    ), patch(
+        "fm_tool_core.process_fm_tool._fetch_bid_rows",
+        return_value=bid_rows,
+    ), patch(
+        "fm_tool_core.process_fm_tool.insert_bid_rows"
     ):
-        with patch(
-            "fm_tool_core.process_fm_tool.read_cell",
-            return_value="HUMD_VAN",
-        ):
-            with patch("fm_tool_core.process_fm_tool.sharepoint_upload"):
-                with patch(
-                    "fm_tool_core.process_fm_tool.sharepoint_file_exists",
-                    return_value=False,
-                ):
-                    tmp_folder = str(tmp_path)
-                    payload = {
-                        "item/In_intMaxRetry": 1,
-                        "item/In_strDestinationProcessingFolder": tmp_folder,
-                        "item/In_dtInputData": [
-                            {
-                                "SCAC_OPP": "HUMD_VAN",
-                                "CLIENT_SCAC": "HUMD",
-                                "KSMTA_DEST_SITE": (
-                                    "https://example." "sharepoint.com"
-                                ),
-                                "KSMTA_DEST_FOLDER_PATH": "/NA",
-                                "CLIENT_DEST_SITE": (
-                                    "https://example." "sharepoint.com"
-                                ),
-                                "CLIENT_DEST_FOLDER_PATH": "/",
-                                "FM_TOOL": "PIT",
-                                "TOOL_TEMPLATE_FILEPATH": __file__,  # any file
-                                "NEW_EXCEL_FILENAME": "dummy.xlsm",
-                                "WEEK_CT": "12",
-                                "PROCESSING_WEEK": "2025-06-14",
-                                "SCAC_VALIDATION_COLUMN": "A",
-                                "SCAC_VALIDATION_ROW": "1",
-                                "ORDERAREAS_VALIDATION_COLUMN": "B",
-                                "ORDERAREAS_VALIDATION_ROW": "1",
-                                "ORDERAREAS_VALIDATION_VALUE": (
-                                    "Input <> " "Order/Area"
-                                ),
-                            }
-                        ],
-                        "item/In_boolEnableSharePointUpload": False,
-                    }
+        result = core.run_flow(payload)
+    assert result["Out_boolWorkcompleted"] is True
+    assert result["Out_strWorkExceptionMessage"] == ""
 
-                    result = core.run_flow(payload)
-                    assert result["Out_boolWorkcompleted"] is True
-                    assert result["Out_strWorkExceptionMessage"] == ""
+
+def test_run_flow_inserts_bid_rows(payload):
+    """run_flow fetches BID rows and inserts them once"""
+
+    bid_rows = [
+        {"Lane ID": 1, "Orig Zip (5 or 3)": "11111", "Dest Zip (5 or 3)": "22222"}
+    ]
+    with patch(
+        "fm_tool_core.process_fm_tool.run_excel_macro",
+        return_value=_FakeWorkbook(),
+    ), patch(
+        "fm_tool_core.process_fm_tool.read_cell",
+        return_value="HUMD_VAN",
+    ), patch(
+        "fm_tool_core.process_fm_tool.sharepoint_upload"
+    ), patch(
+        "fm_tool_core.process_fm_tool.sharepoint_file_exists",
+        return_value=False,
+    ), patch(
+        "fm_tool_core.process_fm_tool._fetch_bid_rows",
+        return_value=bid_rows,
+    ), patch(
+        "fm_tool_core.process_fm_tool.insert_bid_rows"
+    ) as insert_mock:
+        result = core.run_flow(payload)
+    insert_mock.assert_called_once()
+    assert result["Out_boolWorkcompleted"] is True
