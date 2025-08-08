@@ -84,12 +84,20 @@ def test_run_flow_success(payload):
         return_value=bid_rows,
     ), patch(
         "fm_tool_core.process_fm_tool.insert_bid_rows"
-    ):
+    ), patch(
+        "fm_tool_core.process_fm_tool.write_named_cell"
+    ) as write_cell:
         result = core.run_flow(payload)
     macro.assert_called_once()
     args_tuple = macro.call_args[0][1]
     assert len(args_tuple) == 4
     assert args_tuple[-1] == payload["BID-Payload"]
+    write_cell.assert_called_once()
+    assert write_cell.call_args[0] == (
+        macro.call_args[0][0],
+        "BID",
+        payload["BID-Payload"],
+    )
     assert result["Out_boolWorkcompleted"] is True
     assert result["Out_strWorkExceptionMessage"] == ""
 
@@ -116,11 +124,19 @@ def test_run_flow_inserts_bid_rows(payload):
         return_value=bid_rows,
     ), patch(
         "fm_tool_core.process_fm_tool.insert_bid_rows"
-    ) as insert_mock:
+    ) as insert_mock, patch(
+        "fm_tool_core.process_fm_tool.write_named_cell"
+    ) as write_cell:
         result = core.run_flow(payload)
     insert_mock.assert_called_once()
     macro.assert_called_once()
     assert len(macro.call_args[0][1]) == 4
+    write_cell.assert_called_once()
+    assert write_cell.call_args[0] == (
+        macro.call_args[0][0],
+        "BID",
+        payload["BID-Payload"],
+    )
     assert result["Out_boolWorkcompleted"] is True
 
 
@@ -139,8 +155,11 @@ def test_run_flow_without_bid_payload(payload):
     ), patch(
         "fm_tool_core.process_fm_tool.sharepoint_file_exists",
         return_value=False,
-    ):
+    ), patch(
+        "fm_tool_core.process_fm_tool.write_named_cell"
+    ) as write_cell:
         result = core.run_flow(payload)
     macro.assert_called_once()
     assert len(macro.call_args[0][1]) == 3
+    write_cell.assert_not_called()
     assert result["Out_boolWorkcompleted"] is True
