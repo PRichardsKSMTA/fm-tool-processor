@@ -55,13 +55,7 @@ except Exception as _e:  # pragma: no cover
     logging.basicConfig(level=logging.WARNING)
     logging.warning("BID utils unavailable: %s", _e)
 from .constants import LOG_DIR, RETRY_SLEEP
-from .excel_utils import (
-    copy_template,
-    kill_orphan_excels,
-    read_cell,
-    run_excel_macro,
-    write_named_cell,
-)
+from .excel_utils import copy_template, kill_orphan_excels, read_cell, run_excel_macro
 from .exceptions import FlowError
 from .sharepoint_utils import sp_ctx, sharepoint_file_exists, sharepoint_upload
 
@@ -255,7 +249,6 @@ def process_row(
             row["PROCESSING_WEEK"],
         )
         if bid_guid is not None:
-            write_named_cell(dst_path, "BID", bid_guid)
             macro_args += (bid_guid,)
         run_excel_macro(dst_path, macro_args, log)
         log.info("Running macro PopulateAndRunReport …")

@@ -9,11 +9,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-try:
-    import openpyxl  # type: ignore
-except ImportError:
-    openpyxl = None  # type: ignore
-
 from .constants import (
     OPEN_TO,
     POLL_SLEEP,
@@ -227,41 +222,20 @@ def run_excel_macro(wb_path: Path, args: tuple, log: logging.Logger):
         raise err
 
 
-def write_named_cell(wb_path: Path, name: str, value: Any) -> None:
-    if openpyxl is None:
-        raise FlowError("openpyxl is required", work_completed=False)
-    wb = openpyxl.load_workbook(wb_path, keep_vba=True)
-    try:
-        dest = wb.defined_names[name]
-        sheet, cell = next(dest.destinations)
-        wb[sheet][cell].value = value
-        wb.save(wb_path)
-    finally:
-        wb.close()
-
-
 def read_cell(wb_path: Path, col: str, row: str) -> Any:
     if xw is None:
         raise FlowError("xlwings is required", work_completed=False)
-    pythoncom.CoInitialize()
-    app = None
-    wb = None
+    app = xw.App(visible=VISIBLE_EXCEL, add_book=False)  # type: ignore
+    app.api.DisplayFullScreen = False
     try:
-        app = xw.App(visible=VISIBLE_EXCEL, add_book=False)  # type: ignore
-        app.api.DisplayFullScreen = False
         wb = app.books.open(str(wb_path))
         return wb.sheets[SCAC_VALIDATION_SHEET].range(f"{col}{row}").value
     finally:
-        for op in (getattr(wb, "close", None), getattr(app, "kill", None)):
-            if op:
-                try:
-                    op()
-                except Exception:
-                    pass
-        try:
-            pythoncom.CoUninitialize()
-        except Exception:
-            pass
+        for op in (wb.close, app.kill):
+            try:
+                op()
+            except Exception:
+                pass
 
 
 __all__ = [
@@ -269,6 +243,5 @@ __all__ = [
     "copy_template",
     "wait_ready",
     "run_excel_macro",
-    "write_named_cell",
     "read_cell",
 ]
