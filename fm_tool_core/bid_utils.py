@@ -65,6 +65,9 @@ def insert_bid_rows(
         except Exception:
             log.error("BID sheet not found in %s", wb_path)
             return
+        was_protected = bool(getattr(ws.api, "ProtectContents", False))
+        if was_protected:
+            ws.api.Unprotect()
         start = ws.api.Cells(ws.api.Rows.Count, 1).End(-4162).Row + 1
         chunk = 500
         idx = 0
@@ -74,6 +77,8 @@ def insert_bid_rows(
             ws.range(f"A{start}:M{end}").value = block
             start = end + 1
             idx += chunk
+        if was_protected:
+            ws.api.Protect()
         wb.save()
     finally:
         if wb is not None:
