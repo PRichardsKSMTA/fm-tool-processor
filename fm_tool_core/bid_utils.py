@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from itertools import chain
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -32,6 +33,14 @@ def insert_bid_rows(
     wb_path: Path, rows: Iterable[dict[str, Any]], log: logging.Logger
 ) -> None:
     """Append valid *rows* to the BID table of ``wb_path``."""
+    row_iter = iter(rows)
+    try:
+        first = next(row_iter)
+    except StopIteration:
+        log.info("No BID rows to insert")
+        return
+    rows = chain([first], row_iter)
+
     wb = openpyxl.load_workbook(wb_path, keep_vba=True)
     try:
         ws = wb["BID"]
