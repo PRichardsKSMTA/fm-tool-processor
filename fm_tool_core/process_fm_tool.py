@@ -274,11 +274,15 @@ def process_row(
             raise FlowError("Validation failed", work_completed=False)
 
         if bid_guid and insert_bid_rows:
+            start = time.perf_counter()
             rows = _fetch_bid_rows(bid_guid, log)
-            log.info("Fetched %d BID rows", len(rows))
+            fetch_time = time.perf_counter() - start
+            log.info("Fetched %d BID rows in %.3fs", len(rows), fetch_time)
             if rows:
+                start = time.perf_counter()
                 insert_bid_rows(dst_path, rows, log)
-                log.info("Inserted BID rows")
+                ins_time = time.perf_counter() - start
+                log.info("Inserted %d BID rows in %.3fs", len(rows), ins_time)
             else:
                 log.info("No BID rows fetched – skipping insert")
 

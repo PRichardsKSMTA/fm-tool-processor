@@ -8,6 +8,7 @@ Mocks heavy external dependencies (Excel & SharePoint) so we can assert that:
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import logging
 import pytest
 
 import fm_tool_core as core
@@ -83,26 +84,18 @@ def test_run_flow_success(payload):
         "fm_tool_core.process_fm_tool._fetch_bid_rows",
         return_value=bid_rows,
     ), patch(
-        "fm_tool_core.process_fm_tool.insert_bid_rows"
-    ), patch(
-        "fm_tool_core.process_fm_tool.write_named_cell"
-    ) as write_cell:
+        "fm_tool_core.process_fm_tool.insert_bid_rows",
+    ):
         result = core.run_flow(payload)
     macro.assert_called_once()
     args_tuple = macro.call_args[0][1]
     assert len(args_tuple) == 4
     assert args_tuple[-1] == payload["BID-Payload"]
-    write_cell.assert_called_once()
-    assert write_cell.call_args[0] == (
-        macro.call_args[0][0],
-        "BID",
-        payload["BID-Payload"],
-    )
     assert result["Out_boolWorkcompleted"] is True
     assert result["Out_strWorkExceptionMessage"] == ""
 
 
-def test_run_flow_inserts_bid_rows(payload):
+def test_run_flow_inserts_bid_rows(payload, caplog):
     """run_flow fetches BID rows and inserts them once"""
 
     bid_rows = [
@@ -124,23 +117,18 @@ def test_run_flow_inserts_bid_rows(payload):
         return_value=bid_rows,
     ), patch(
         "fm_tool_core.process_fm_tool.insert_bid_rows"
-    ) as insert_mock, patch(
-        "fm_tool_core.process_fm_tool.write_named_cell"
-    ) as write_cell:
-        result = core.run_flow(payload)
+    ) as insert_mock:
+        with caplog.at_level(logging.INFO):
+            result = core.run_flow(payload)
     insert_mock.assert_called_once()
     macro.assert_called_once()
     assert len(macro.call_args[0][1]) == 4
-    write_cell.assert_called_once()
-    assert write_cell.call_args[0] == (
-        macro.call_args[0][0],
-        "BID",
-        payload["BID-Payload"],
-    )
+    assert any("Fetched 1 BID rows in" in rec.message for rec in caplog.records)
+    assert any("Inserted 1 BID rows in" in rec.message for rec in caplog.records)
     assert result["Out_boolWorkcompleted"] is True
 
 
-def test_run_flow_skips_insert_when_no_rows(payload):
+def test_run_flow_skips_insert_when_no_rows(payload, caplog):
     """insert_bid_rows is not called when no BID rows fetched"""
 
     with patch(
@@ -159,12 +147,13 @@ def test_run_flow_skips_insert_when_no_rows(payload):
         return_value=[],
     ), patch(
         "fm_tool_core.process_fm_tool.insert_bid_rows"
-    ) as insert_mock, patch(
-        "fm_tool_core.process_fm_tool.write_named_cell",
-    ):
-        core.run_flow(payload)
+    ) as insert_mock:
+        with caplog.at_level(logging.INFO):
+            core.run_flow(payload)
     insert_mock.assert_not_called()
     macro.assert_called_once()
+    assert any("Fetched 0 BID rows in" in rec.message for rec in caplog.records)
+    assert not any("Inserted" in rec.message for rec in caplog.records)
 
 
 def test_run_flow_without_bid_payload(payload):
@@ -182,11 +171,8 @@ def test_run_flow_without_bid_payload(payload):
     ), patch(
         "fm_tool_core.process_fm_tool.sharepoint_file_exists",
         return_value=False,
-    ), patch(
-        "fm_tool_core.process_fm_tool.write_named_cell"
-    ) as write_cell:
+    ):
         result = core.run_flow(payload)
     macro.assert_called_once()
     assert len(macro.call_args[0][1]) == 3
-    write_cell.assert_not_called()
     assert result["Out_boolWorkcompleted"] is True
