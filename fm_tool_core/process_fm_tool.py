@@ -243,9 +243,14 @@ def process_row(
 
     try:
         log.info("Opening workbook …")
-        run_excel_macro(
-            dst_path, (row["SCAC_OPP"], row["WEEK_CT"], row["PROCESSING_WEEK"]), log
+        macro_args = (
+            row["SCAC_OPP"],
+            row["WEEK_CT"],
+            row["PROCESSING_WEEK"],
         )
+        if bid_guid is not None:
+            macro_args += (bid_guid,)
+        run_excel_macro(dst_path, macro_args, log)
         log.info("Running macro PopulateAndRunReport …")
 
         log.info("Reading validation …")
