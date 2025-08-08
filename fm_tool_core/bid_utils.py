@@ -5,7 +5,8 @@ from itertools import chain
 from pathlib import Path
 from typing import Any, Iterable
 
-import openpyxl
+from .constants import VISIBLE_EXCEL
+from .excel_utils import pythoncom, xw
 
 _COLUMNS = [
     "Lane ID",
@@ -32,7 +33,7 @@ _REQUIRED = {
 def insert_bid_rows(
     wb_path: Path, rows: Iterable[dict[str, Any]], log: logging.Logger
 ) -> None:
-    """Append valid *rows* to the BID table of ``wb_path``."""
+    """Append valid *rows* to the BID table of ``wb_path`` using COM."""
     row_iter = iter(rows)
     try:
         first = next(row_iter)
@@ -41,23 +42,53 @@ def insert_bid_rows(
         return
     rows = chain([first], row_iter)
 
-    wb = openpyxl.load_workbook(wb_path, keep_vba=True)
-    try:
-        ws = wb["BID"]
-    except KeyError:
-        log.error("BID sheet not found in %s", wb_path)
+    data: list[list[Any]] = []
+    for rec in rows:
+        if _REQUIRED.issubset(k for k in rec if rec[k] is not None):
+            data.append([rec.get(col, "") for col in _COLUMNS])
+    if not data:
+        log.info("No BID rows to insert")
         return
 
-    for data in rows:
-        if not _REQUIRED.issubset(k for k in data if data[k] is not None):
-            continue
-        ws.append([data.get(col, "") for col in _COLUMNS])
+    if xw is None:
+        log.error("xlwings is required for BID inserts")
+        return
 
-    wb.save(wb_path)
+    pythoncom.CoInitialize()
+    app = xw.App(visible=VISIBLE_EXCEL, add_book=False)  # type: ignore
+    app.api.DisplayAlerts = False
+    wb = None
     try:
-        wb.close()
-    except Exception:
-        pass
+        wb = app.books.open(str(wb_path))
+        try:
+            ws = wb.sheets["BID"]
+        except Exception:
+            log.error("BID sheet not found in %s", wb_path)
+            return
+        start = ws.api.Cells(ws.api.Rows.Count, 1).End(-4162).Row + 1
+        chunk = 500
+        idx = 0
+        while idx < len(data):
+            block = data[idx : idx + chunk]
+            end = start + len(block) - 1
+            ws.range(f"A{start}:M{end}").value = block
+            start = end + 1
+            idx += chunk
+        wb.save()
+    finally:
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
+        try:
+            app.kill()
+        except Exception:
+            pass
+        try:
+            pythoncom.CoUninitialize()
+        except Exception:
+            pass
 
 
 __all__ = ["insert_bid_rows"]

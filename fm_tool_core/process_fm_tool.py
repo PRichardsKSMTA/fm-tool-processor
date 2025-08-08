@@ -282,7 +282,11 @@ def process_row(
                 start = time.perf_counter()
                 insert_bid_rows(dst_path, rows, log)
                 ins_time = time.perf_counter() - start
-                log.info("Inserted %d BID rows in %.3fs", len(rows), ins_time)
+                log.info(
+                    "Batch inserted %d BID rows in %.3fs",
+                    len(rows),
+                    ins_time,
+                )
             else:
                 log.info("No BID rows fetched – skipping insert")
 
