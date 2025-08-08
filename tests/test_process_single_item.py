@@ -124,7 +124,7 @@ def test_run_flow_inserts_bid_rows(payload, caplog):
     macro.assert_called_once()
     assert len(macro.call_args[0][1]) == 4
     assert any("Fetched 1 BID rows in" in rec.message for rec in caplog.records)
-    assert any("Inserted 1 BID rows in" in rec.message for rec in caplog.records)
+    assert any("Batch inserted 1 BID rows in" in rec.message for rec in caplog.records)
     assert result["Out_boolWorkcompleted"] is True
 
 
@@ -153,7 +153,7 @@ def test_run_flow_skips_insert_when_no_rows(payload, caplog):
     insert_mock.assert_not_called()
     macro.assert_called_once()
     assert any("Fetched 0 BID rows in" in rec.message for rec in caplog.records)
-    assert not any("Inserted" in rec.message for rec in caplog.records)
+    assert not any("Batch inserted" in rec.message for rec in caplog.records)
 
 
 def test_run_flow_without_bid_payload(payload):
