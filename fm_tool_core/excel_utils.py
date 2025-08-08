@@ -243,17 +243,25 @@ def write_named_cell(wb_path: Path, name: str, value: Any) -> None:
 def read_cell(wb_path: Path, col: str, row: str) -> Any:
     if xw is None:
         raise FlowError("xlwings is required", work_completed=False)
-    app = xw.App(visible=VISIBLE_EXCEL, add_book=False)  # type: ignore
-    app.api.DisplayFullScreen = False
+    pythoncom.CoInitialize()
+    app = None
+    wb = None
     try:
+        app = xw.App(visible=VISIBLE_EXCEL, add_book=False)  # type: ignore
+        app.api.DisplayFullScreen = False
         wb = app.books.open(str(wb_path))
         return wb.sheets[SCAC_VALIDATION_SHEET].range(f"{col}{row}").value
     finally:
-        for op in (wb.close, app.kill):
-            try:
-                op()
-            except Exception:
-                pass
+        for op in (getattr(wb, "close", None), getattr(app, "kill", None)):
+            if op:
+                try:
+                    op()
+                except Exception:
+                    pass
+        try:
+            pythoncom.CoUninitialize()
+        except Exception:
+            pass
 
 
 __all__ = [
