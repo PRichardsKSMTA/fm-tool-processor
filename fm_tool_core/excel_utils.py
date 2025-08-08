@@ -225,6 +225,7 @@ def run_excel_macro(wb_path: Path, args: tuple, log: logging.Logger):
 def read_cell(wb_path: Path, col: str, row: str) -> Any:
     if xw is None:
         raise FlowError("xlwings is required", work_completed=False)
+    pythoncom.CoInitialize()
     app = xw.App(visible=VISIBLE_EXCEL, add_book=False)  # type: ignore
     app.api.DisplayFullScreen = False
     try:
@@ -236,6 +237,10 @@ def read_cell(wb_path: Path, col: str, row: str) -> Any:
                 op()
             except Exception:
                 pass
+        try:
+            pythoncom.CoUninitialize()
+        except Exception:
+            pass
 
 
 __all__ = [
