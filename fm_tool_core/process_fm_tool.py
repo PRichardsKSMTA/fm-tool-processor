@@ -275,7 +275,12 @@ def process_row(
 
         if bid_guid and insert_bid_rows:
             rows = _fetch_bid_rows(bid_guid, log)
-            insert_bid_rows(dst_path, rows, log)
+            log.info("Fetched %d BID rows", len(rows))
+            if rows:
+                insert_bid_rows(dst_path, rows, log)
+                log.info("Inserted BID rows")
+            else:
+                log.info("No BID rows fetched – skipping insert")
 
         if upload:
             ctx = sp_ctx(row["CLIENT_DEST_SITE"])
