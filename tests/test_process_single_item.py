@@ -140,6 +140,33 @@ def test_run_flow_inserts_bid_rows(payload):
     assert result["Out_boolWorkcompleted"] is True
 
 
+def test_run_flow_skips_insert_when_no_rows(payload):
+    """insert_bid_rows is not called when no BID rows fetched"""
+
+    with patch(
+        "fm_tool_core.process_fm_tool.run_excel_macro",
+        return_value=_FakeWorkbook(),
+    ) as macro, patch(
+        "fm_tool_core.process_fm_tool.read_cell",
+        return_value="HUMD_VAN",
+    ), patch(
+        "fm_tool_core.process_fm_tool.sharepoint_upload"
+    ), patch(
+        "fm_tool_core.process_fm_tool.sharepoint_file_exists",
+        return_value=False,
+    ), patch(
+        "fm_tool_core.process_fm_tool._fetch_bid_rows",
+        return_value=[],
+    ), patch(
+        "fm_tool_core.process_fm_tool.insert_bid_rows"
+    ) as insert_mock, patch(
+        "fm_tool_core.process_fm_tool.write_named_cell",
+    ):
+        core.run_flow(payload)
+    insert_mock.assert_not_called()
+    macro.assert_called_once()
+
+
 def test_run_flow_without_bid_payload(payload):
     """run_excel_macro only receives three args when BID-Payload missing"""
 
