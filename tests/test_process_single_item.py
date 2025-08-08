@@ -71,7 +71,7 @@ def test_run_flow_success(payload):
     with patch(
         "fm_tool_core.process_fm_tool.run_excel_macro",
         return_value=_FakeWorkbook(),
-    ), patch(
+    ) as macro, patch(
         "fm_tool_core.process_fm_tool.read_cell",
         return_value="HUMD_VAN",
     ), patch(
@@ -86,6 +86,10 @@ def test_run_flow_success(payload):
         "fm_tool_core.process_fm_tool.insert_bid_rows"
     ):
         result = core.run_flow(payload)
+    macro.assert_called_once()
+    args_tuple = macro.call_args[0][1]
+    assert len(args_tuple) == 4
+    assert args_tuple[-1] == payload["BID-Payload"]
     assert result["Out_boolWorkcompleted"] is True
     assert result["Out_strWorkExceptionMessage"] == ""
 
@@ -99,7 +103,7 @@ def test_run_flow_inserts_bid_rows(payload):
     with patch(
         "fm_tool_core.process_fm_tool.run_excel_macro",
         return_value=_FakeWorkbook(),
-    ), patch(
+    ) as macro, patch(
         "fm_tool_core.process_fm_tool.read_cell",
         return_value="HUMD_VAN",
     ), patch(
@@ -115,4 +119,28 @@ def test_run_flow_inserts_bid_rows(payload):
     ) as insert_mock:
         result = core.run_flow(payload)
     insert_mock.assert_called_once()
+    macro.assert_called_once()
+    assert len(macro.call_args[0][1]) == 4
+    assert result["Out_boolWorkcompleted"] is True
+
+
+def test_run_flow_without_bid_payload(payload):
+    """run_excel_macro only receives three args when BID-Payload missing"""
+
+    payload.pop("BID-Payload")
+    with patch(
+        "fm_tool_core.process_fm_tool.run_excel_macro",
+        return_value=_FakeWorkbook(),
+    ) as macro, patch(
+        "fm_tool_core.process_fm_tool.read_cell",
+        return_value="HUMD_VAN",
+    ), patch(
+        "fm_tool_core.process_fm_tool.sharepoint_upload"
+    ), patch(
+        "fm_tool_core.process_fm_tool.sharepoint_file_exists",
+        return_value=False,
+    ):
+        result = core.run_flow(payload)
+    macro.assert_called_once()
+    assert len(macro.call_args[0][1]) == 3
     assert result["Out_boolWorkcompleted"] is True
