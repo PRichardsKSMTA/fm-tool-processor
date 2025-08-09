@@ -201,9 +201,9 @@ def _fetch_bid_rows(process_guid: str, log: logging.Logger) -> List[Dict[str, An
             )
             return [
                 {
-                    "Lane ID": lane_id,
-                    "Orig Zip (5 or 3)": orig,
-                    "Dest Zip (5 or 3)": dest,
+                    "LANE_ID": lane_id,
+                    "ORIG_POSTAL_CD": orig,
+                    "DEST_POSTAL_CD": dest,
                 }
                 for lane_id, orig, dest in cur.fetchall()
             ]
