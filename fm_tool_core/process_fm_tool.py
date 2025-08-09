@@ -326,9 +326,10 @@ def process_row(
             rows = _fetch_bid_rows(bid_guid, log)
             fetch_time = time.perf_counter() - start
             log.info("Fetched %d BID rows in %.3fs", len(rows), fetch_time)
+            headers = _fetch_adhoc_headers(bid_guid, log)
             if rows:
                 start = time.perf_counter()
-                insert_bid_rows(dst_path, rows, log)
+                insert_bid_rows(dst_path, rows, log, headers)
                 ins_time = time.perf_counter() - start
                 log.info(
                     "Batch inserted %d BID rows in %.3fs",
