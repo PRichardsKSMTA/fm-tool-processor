@@ -46,10 +46,12 @@ _REQUIRED = {
     "DEST_POSTAL_CD",
 }
 
-_TARGET_SHEET = "RFP"          # ← changed from “BID”
+_TARGET_SHEET = "RFP"  # ← changed from “BID”
 
 
-def insert_bid_rows(wb_path: Path, rows: Iterable[dict[str, Any]], log: logging.Logger) -> None:
+def insert_bid_rows(
+    wb_path: Path, rows: Iterable[dict[str, Any]], log: logging.Logger
+) -> None:
     """Bulk-insert BID/RFP *rows* into the RFP sheet of *wb_path*."""
     row_iter = iter(rows)
     try:
