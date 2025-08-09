@@ -99,7 +99,10 @@ def insert_bid_rows(
             header_rng = ws.range((1, 1)).resize(1, len(_COLUMNS))
             values = header_rng.value
             if isinstance(values, list):
-                header_rng.value = [adhoc_headers.get(str(v), v) for v in values]
+                nested = bool(values and isinstance(values[0], list))
+                headers = values[0] if nested else values
+                headers = [adhoc_headers.get(str(v), v) for v in headers]
+                header_rng.value = [headers] if nested else headers
 
         # First empty row in column A
         start_row = ws.api.Cells(ws.api.Rows.Count, 1).End(-4162).Row + 1
@@ -109,7 +112,12 @@ def insert_bid_rows(
         # One-shot write
         ws.range((start_row, 1)).resize(n_rows, n_cols).value = data
         wb.save()
-        log.info("Wrote %d rows × %d cols to %s sheet", n_rows, n_cols, _TARGET_SHEET)
+        log.info(
+            "Wrote %d rows × %d cols to %s sheet",
+            n_rows,
+            n_cols,
+            _TARGET_SHEET,
+        )
     finally:
         if wb is not None:
             try:

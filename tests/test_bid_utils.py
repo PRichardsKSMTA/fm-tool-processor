@@ -140,11 +140,12 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
 
         @property
         def value(self):
-            return self.sheet.headers
+            return [self.sheet.headers]
 
         @value.setter
         def value(self, val):
-            self.sheet.headers = val
+            assert isinstance(val, list) and isinstance(val[0], list)
+            self.sheet.headers = val[0]
 
     class FakeDataRange:
         def __init__(self):
