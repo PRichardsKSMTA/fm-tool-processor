@@ -8,7 +8,10 @@ Mocks heavy external dependencies (Excel & SharePoint) so we can assert that:
 from types import SimpleNamespace
 from unittest.mock import patch
 
+<<<<<<< HEAD
 import logging
+=======
+>>>>>>> 0626e50 (Update VM with current version)
 import pytest
 
 import fm_tool_core as core
@@ -84,21 +87,44 @@ def test_run_flow_success(payload):
         "fm_tool_core.process_fm_tool._fetch_bid_rows",
         return_value=bid_rows,
     ), patch(
+<<<<<<< HEAD
         "fm_tool_core.process_fm_tool._fetch_adhoc_headers",
         return_value={},
     ), patch(
+=======
+<<<<<<< HEAD
+>>>>>>> aa4e400 (resolve merge conflict)
         "fm_tool_core.process_fm_tool.insert_bid_rows",
     ):
+=======
+        "fm_tool_core.process_fm_tool.insert_bid_rows"
+    ), patch(
+        "fm_tool_core.process_fm_tool.write_named_cell"
+    ) as write_cell:
+>>>>>>> 0626e50 (Update VM with current version)
         result = core.run_flow(payload)
     macro.assert_called_once()
     args_tuple = macro.call_args[0][1]
     assert len(args_tuple) == 4
     assert args_tuple[-1] == payload["BID-Payload"]
+<<<<<<< HEAD
+=======
+    write_cell.assert_called_once()
+    assert write_cell.call_args[0] == (
+        macro.call_args[0][0],
+        "BID",
+        payload["BID-Payload"],
+    )
+>>>>>>> 0626e50 (Update VM with current version)
     assert result["Out_boolWorkcompleted"] is True
     assert result["Out_strWorkExceptionMessage"] == ""
 
 
+<<<<<<< HEAD
 def test_run_flow_inserts_bid_rows(payload, caplog):
+=======
+def test_run_flow_inserts_bid_rows(payload):
+>>>>>>> 0626e50 (Update VM with current version)
     """run_flow fetches BID rows and inserts them once"""
 
     bid_rows = [
@@ -123,6 +149,7 @@ def test_run_flow_inserts_bid_rows(payload, caplog):
         return_value={"ADHOC_INFO1": "X1"},
     ), patch(
         "fm_tool_core.process_fm_tool.insert_bid_rows"
+<<<<<<< HEAD
     ) as insert_mock:
         with caplog.at_level(logging.INFO):
             result = core.run_flow(payload)
@@ -166,6 +193,24 @@ def test_run_flow_skips_insert_when_no_rows(payload, caplog):
     assert not any("Batch inserted" in rec.message for rec in caplog.records)
 
 
+=======
+    ) as insert_mock, patch(
+        "fm_tool_core.process_fm_tool.write_named_cell"
+    ) as write_cell:
+        result = core.run_flow(payload)
+    insert_mock.assert_called_once()
+    macro.assert_called_once()
+    assert len(macro.call_args[0][1]) == 4
+    write_cell.assert_called_once()
+    assert write_cell.call_args[0] == (
+        macro.call_args[0][0],
+        "BID",
+        payload["BID-Payload"],
+    )
+    assert result["Out_boolWorkcompleted"] is True
+
+
+>>>>>>> 0626e50 (Update VM with current version)
 def test_run_flow_without_bid_payload(payload):
     """run_excel_macro only receives three args when BID-Payload missing"""
 
@@ -181,8 +226,18 @@ def test_run_flow_without_bid_payload(payload):
     ), patch(
         "fm_tool_core.process_fm_tool.sharepoint_file_exists",
         return_value=False,
+<<<<<<< HEAD
     ):
         result = core.run_flow(payload)
     macro.assert_called_once()
     assert len(macro.call_args[0][1]) == 3
+=======
+    ), patch(
+        "fm_tool_core.process_fm_tool.write_named_cell"
+    ) as write_cell:
+        result = core.run_flow(payload)
+    macro.assert_called_once()
+    assert len(macro.call_args[0][1]) == 3
+    write_cell.assert_not_called()
+>>>>>>> 0626e50 (Update VM with current version)
     assert result["Out_boolWorkcompleted"] is True

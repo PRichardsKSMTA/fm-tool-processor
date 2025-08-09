@@ -225,47 +225,6 @@ def _fetch_bid_rows(process_guid: str, log: logging.Logger) -> List[Dict[str, An
                 pass
 
 
-def _fetch_adhoc_headers(process_guid: str, log: logging.Logger) -> Dict[str, str]:
-    """Return ADHOC_INFO* labels for *process_guid*."""
-    if pyodbc is None:
-        log.info("(SQL disabled) would fetch ad-hoc headers for %s", process_guid)
-        return {}
-
-    conn = None
-    try:
-        conn = pyodbc.connect(_sql_conn_str(), timeout=10)
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT PROCESS_JSON FROM dbo.MAPPING_AGENT_PROCESSES "
-                "WHERE PROCESS_GUID = ?",
-                (process_guid,),
-            )
-            row = cur.fetchone()
-            if not row or not row[0]:
-                return {}
-            try:
-                data = json.loads(row[0])
-            except Exception as exc:
-                log.warning("Malformed PROCESS_JSON: %s", exc)
-                return {}
-            return {
-                k: v
-                for k, v in (
-                    (f"ADHOC_INFO{i}", data.get(f"ADHOC_INFO{i}")) for i in range(1, 11)
-                )
-                if isinstance(v, str)
-            }
-    except Exception as exc:
-        log.warning("Failed to fetch ad-hoc headers: %s", exc)
-        return {}
-    finally:
-        if conn:
-            try:
-                conn.close()
-            except Exception:
-                pass
-
-
 # ───────────────────────────── ROW WORKER ──────────────────────────────────
 def process_row(
     row: Dict[str, Any],
