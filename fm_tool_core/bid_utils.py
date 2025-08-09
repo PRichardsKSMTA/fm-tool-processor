@@ -50,9 +50,17 @@ _TARGET_SHEET = "RFP"  # ← changed from “BID”
 
 
 def insert_bid_rows(
-    wb_path: Path, rows: Iterable[dict[str, Any]], log: logging.Logger
+    wb_path: Path,
+    rows: Iterable[dict[str, Any]],
+    log: logging.Logger,
+    adhoc_headers: dict[str, str] | None = None,
 ) -> None:
-    """Bulk-insert BID/RFP *rows* into the RFP sheet of *wb_path*."""
+    """
+    Bulk-insert BID/RFP *rows* into the RFP sheet of *wb_path*.
+
+    If *adhoc_headers* is provided, header labels matching its keys are
+    replaced with the corresponding values before inserting any data rows.
+    """
     row_iter = iter(rows)
     try:
         first = next(row_iter)
@@ -86,6 +94,12 @@ def insert_bid_rows(
         except Exception:
             log.error("%s sheet not found in %s", _TARGET_SHEET, wb_path)
             return
+
+        if adhoc_headers:
+            header_rng = ws.range((1, 1)).resize(1, len(_COLUMNS))
+            values = header_rng.value
+            if isinstance(values, list):
+                header_rng.value = [adhoc_headers.get(str(v), v) for v in values]
 
         # First empty row in column A
         start_row = ws.api.Cells(ws.api.Rows.Count, 1).End(-4162).Row + 1
