@@ -46,11 +46,21 @@ _REQUIRED = {
     "DEST_POSTAL_CD",
 }
 
-_TARGET_SHEET = "RFP"          # ← changed from “BID”
+_TARGET_SHEET = "RFP"  # ← changed from “BID”
 
 
-def insert_bid_rows(wb_path: Path, rows: Iterable[dict[str, Any]], log: logging.Logger) -> None:
-    """Bulk-insert BID/RFP *rows* into the RFP sheet of *wb_path*."""
+def insert_bid_rows(
+    wb_path: Path,
+    rows: Iterable[dict[str, Any]],
+    log: logging.Logger,
+    adhoc_headers: dict[str, str] | None = None,
+) -> None:
+    """
+    Bulk-insert BID/RFP *rows* into the RFP sheet of *wb_path*.
+
+    If *adhoc_headers* is provided, header labels matching its keys are
+    replaced with the corresponding values before inserting any data rows.
+    """
     row_iter = iter(rows)
     try:
         first = next(row_iter)
