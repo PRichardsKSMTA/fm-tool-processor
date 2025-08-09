@@ -23,9 +23,11 @@ def test_insert_bid_rows_early_return(monkeypatch, tmp_path, caplog):
     assert "No RFP rows to insert" in caplog.text
 
 
-def test_insert_bid_rows_writes_rows(monkeypatch, tmp_path):
+def test_insert_bid_rows_writes_rows(monkeypatch, tmp_path, caplog):
     from fm_tool_core import bid_utils
 
+    wb_path = tmp_path / "wb.xlsx"
+    wb_path.touch()
     calls: list[str] = []
 
     class FakeApi:
@@ -108,13 +110,17 @@ def test_insert_bid_rows_writes_rows(monkeypatch, tmp_path):
         }
     ]
     log = logging.getLogger("test")
-    bid_utils.insert_bid_rows(tmp_path / "wb.xlsx", rows, log)
+    with caplog.at_level(logging.INFO):
+        bid_utils.insert_bid_rows(wb_path, rows, log)
     assert calls == ["write"]
+    assert any("RFP sheet" in r.message for r in caplog.records)
 
 
 def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
     from fm_tool_core import bid_utils
 
+    wb_path = tmp_path / "wb.xlsx"
+    wb_path.touch()
     calls: list[str] = []
 
     class FakeApi:
@@ -218,7 +224,7 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
     ]
     log = logging.getLogger("test")
     bid_utils.insert_bid_rows(
-        tmp_path / "wb.xlsx",
+        wb_path,
         rows,
         log,
         adhoc_headers={"ADHOC_INFO1": "X1", "ADHOC_INFO3": "X3"},
