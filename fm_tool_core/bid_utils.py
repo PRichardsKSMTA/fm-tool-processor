@@ -1,3 +1,4 @@
+# fm_tool_core/bid_utils.py
 from __future__ import annotations
 
 import logging
@@ -5,59 +6,108 @@ from itertools import chain
 from pathlib import Path
 from typing import Any, Iterable
 
-import openpyxl
+from .constants import VISIBLE_EXCEL
+from .excel_utils import pythoncom, xw
 
+###############################################################################
+# Column layout: 25 columns (A → Y)                                           #
+###############################################################################
 _COLUMNS = [
-    "Lane ID",
-    "Origin City",
-    "Orig State",
-    "Orig Zip (5 or 3)",
-    "Destination City",
-    "Dest State",
-    "Dest Zip (5 or 3)",
-    "Bid Volume",
-    "LH Rate",
-    "Bid Miles",
-    "Miles",
-    "Tolls",
+    "LANE_ID",
+    "ORIG_CITY",
+    "ORIG_ST",
+    "ORIG_POSTAL_CD",
+    "DEST_CITY",
+    "DEST_ST",
+    "DEST_POSTAL_CD",
+    "BID_VOLUME",
+    "LH_RATE",
+    "RFP_MILES",
+    "FREIGHT_TYPE",
+    "TEMP_CAT",
+    "BTF_FSC_PER_MILE",
+    "ADHOC_INFO1",
+    "ADHOC_INFO2",
+    "ADHOC_INFO3",
+    "ADHOC_INFO4",
+    "ADHOC_INFO5",
+    "ADHOC_INFO6",
+    "ADHOC_INFO7",
+    "ADHOC_INFO8",
+    "ADHOC_INFO9",
+    "ADHOC_INFO10",
+    "FM_MILES",
+    "FM_TOLLS",
 ]
 
 _REQUIRED = {
-    "Lane ID",
-    "Orig Zip (5 or 3)",
-    "Dest Zip (5 or 3)",
+    "LANE_ID",
+    "ORIG_POSTAL_CD",
+    "DEST_POSTAL_CD",
 }
 
+_TARGET_SHEET = "RFP"          # ← changed from “BID”
 
-def insert_bid_rows(
-    wb_path: Path, rows: Iterable[dict[str, Any]], log: logging.Logger
-) -> None:
-    """Append valid *rows* to the BID table of ``wb_path``."""
+
+def insert_bid_rows(wb_path: Path, rows: Iterable[dict[str, Any]], log: logging.Logger) -> None:
+    """Bulk-insert BID/RFP *rows* into the RFP sheet of *wb_path*."""
     row_iter = iter(rows)
     try:
         first = next(row_iter)
     except StopIteration:
-        log.info("No BID rows to insert")
+        log.info("No RFP rows to insert")
         return
+
     rows = chain([first], row_iter)
 
-    wb = openpyxl.load_workbook(wb_path, keep_vba=True)
-    try:
-        ws = wb["BID"]
-    except KeyError:
-        log.error("BID sheet not found in %s", wb_path)
+    data: list[list[Any]] = []
+    for rec in rows:
+        if _REQUIRED.issubset(k for k in rec if rec[k] is not None):
+            data.append([rec.get(col) or "" for col in _COLUMNS])
+
+    if not data:
+        log.info("No RFP rows to insert after validation")
         return
 
-    for data in rows:
-        if not _REQUIRED.issubset(k for k in data if data[k] is not None):
-            continue
-        ws.append([data.get(col, "") for col in _COLUMNS])
+    if xw is None:
+        log.error("xlwings is required for RFP inserts")
+        return
 
-    wb.save(wb_path)
+    pythoncom.CoInitialize()
+    app = xw.App(visible=VISIBLE_EXCEL, add_book=False)  # type: ignore
+    app.api.DisplayAlerts = False
+    wb = None
     try:
-        wb.close()
-    except Exception:
-        pass
+        wb = app.books.open(str(wb_path))
+        try:
+            ws = wb.sheets[_TARGET_SHEET]
+        except Exception:
+            log.error("%s sheet not found in %s", _TARGET_SHEET, wb_path)
+            return
+
+        # First empty row in column A
+        start_row = ws.api.Cells(ws.api.Rows.Count, 1).End(-4162).Row + 1
+        n_rows = len(data)
+        n_cols = len(_COLUMNS)
+
+        # One-shot write
+        ws.range((start_row, 1)).resize(n_rows, n_cols).value = data
+        wb.save()
+        log.info("Wrote %d rows × %d cols to %s sheet", n_rows, n_cols, _TARGET_SHEET)
+    finally:
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
+        try:
+            app.kill()
+        except Exception:
+            pass
+        try:
+            pythoncom.CoUninitialize()
+        except Exception:
+            pass
 
 
-__all__ = ["insert_bid_rows"]
+__all__ = ["insert_bid_rows", "_COLUMNS"]

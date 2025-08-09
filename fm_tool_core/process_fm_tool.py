@@ -49,7 +49,7 @@ except ImportError as _e:  # pragma: no cover
     logging.warning("pyodbc missing – SQL disabled (%s)", _e)
 
 try:
-    from .bid_utils import insert_bid_rows
+    from .bid_utils import insert_bid_rows, _COLUMNS
 except Exception as _e:  # pragma: no cover
     insert_bid_rows = None  # type: ignore
     logging.basicConfig(level=logging.WARNING)
@@ -186,27 +186,34 @@ def _detect_payload_type(rows: List[Dict[str, Any]]) -> str:
 
 
 def _fetch_bid_rows(process_guid: str, log: logging.Logger) -> List[Dict[str, Any]]:
-    """Return BID rows for *process_guid* or ``[]`` on failure."""
+    """
+    Return BID rows for *process_guid*.
+
+    The SELECT **order must match** _COLUMNS in bid_utils.py.
+    """
     if pyodbc is None:
         log.info("(SQL disabled) would fetch BID rows for %s", process_guid)
         return []
+
     conn = None
     try:
         conn = pyodbc.connect(_sql_conn_str(), timeout=10)
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT LANE_ID, ORIG_POSTAL_CD, DEST_POSTAL_CD "
-                "FROM dbo.RFP_OBJECT_DATA WHERE PROCESS_GUID = ?",
+                """
+                SELECT LANE_ID, ORIG_CITY, ORIG_ST, ORIG_POSTAL_CD,
+                       DEST_CITY, DEST_ST, DEST_POSTAL_CD,
+                       BID_VOLUME, LH_RATE, RFP_MILES,
+                       FREIGHT_TYPE, TEMP_CAT, BTF_FSC_PER_MILE,
+                       ADHOC_INFO1, ADHOC_INFO2, ADHOC_INFO3, ADHOC_INFO4, ADHOC_INFO5,
+                       ADHOC_INFO6, ADHOC_INFO7, ADHOC_INFO8, ADHOC_INFO9, ADHOC_INFO10,
+                       FM_MILES, FM_TOLLS
+                FROM dbo.RFP_OBJECT_DATA
+                WHERE PROCESS_GUID = ?
+                """,
                 (process_guid,),
             )
-            return [
-                {
-                    "LANE_ID": lane_id,
-                    "ORIG_POSTAL_CD": orig,
-                    "DEST_POSTAL_CD": dest,
-                }
-                for lane_id, orig, dest in cur.fetchall()
-            ]
+            return [dict(zip(_COLUMNS, row)) for row in cur.fetchall()]
     except Exception as exc:
         log.warning("Failed to fetch BID rows: %s", exc)
         return []
