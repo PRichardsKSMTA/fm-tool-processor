@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from itertools import chain
 from pathlib import Path
 from typing import Any, Iterable
@@ -98,9 +99,14 @@ def insert_bid_rows(
         if adhoc_headers:
             header_rng = ws.range((1, 1)).resize(1, len(_COLUMNS))
             values = header_rng.value
-            if isinstance(values, list):
-                nested = bool(values and isinstance(values[0], list))
-                row = values[0] if nested else values
+            if isinstance(values, Sequence) and not isinstance(values, str):
+                outer = list(values)
+                nested = (
+                    bool(outer)
+                    and isinstance(outer[0], Sequence)
+                    and not isinstance(outer[0], str)
+                )
+                row = list(outer[0]) if nested else outer
                 mapped_row = [adhoc_headers.get(str(v), v) for v in row]
                 header_rng.value = [mapped_row] if nested else mapped_row
 

@@ -140,7 +140,7 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
 
         @property
         def value(self):
-            return [self.sheet.headers]
+            return (tuple(self.sheet.headers),)
 
         @value.setter
         def value(self, val):
