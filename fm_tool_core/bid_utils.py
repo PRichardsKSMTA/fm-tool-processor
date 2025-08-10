@@ -100,9 +100,9 @@ def insert_bid_rows(
             values = header_rng.value
             if isinstance(values, list):
                 nested = bool(values and isinstance(values[0], list))
-                headers = values[0] if nested else values
-                headers = [adhoc_headers.get(str(v), v) for v in headers]
-                header_rng.value = [headers] if nested else headers
+                row = values[0] if nested else values
+                mapped_row = [adhoc_headers.get(str(v), v) for v in row]
+                header_rng.value = [mapped_row] if nested else mapped_row
 
         # First empty row in column A
         start_row = ws.api.Cells(ws.api.Rows.Count, 1).End(-4162).Row + 1
