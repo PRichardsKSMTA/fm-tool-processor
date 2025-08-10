@@ -112,7 +112,12 @@ def insert_bid_rows(
         # One-shot write
         ws.range((start_row, 1)).resize(n_rows, n_cols).value = data
         wb.save()
-        log.info("Wrote %d rows × %d cols to %s sheet", n_rows, n_cols, _TARGET_SHEET)
+        log.info(
+            "Wrote %d rows × %d cols to %s sheet",
+            n_rows,
+            n_cols,
+            _TARGET_SHEET,
+        )
     finally:
         if wb is not None:
             try:
