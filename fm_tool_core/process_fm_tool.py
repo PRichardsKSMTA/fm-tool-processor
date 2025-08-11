@@ -255,13 +255,15 @@ def _fetch_adhoc_headers(process_guid: str, log: logging.Logger) -> Dict[str, st
             except Exception as exc:
                 log.warning("Malformed PROCESS_JSON: %s", exc)
                 return {}
-            return {
+            headers = {
                 k: v
                 for k, v in (
                     (f"ADHOC_INFO{i}", data.get(f"ADHOC_INFO{i}")) for i in range(1, 11)
                 )
                 if isinstance(v, str)
             }
+            log.debug("Fetched custom headers: %s", headers)
+            return headers
     except Exception as exc:
         log.warning("Failed to fetch ad-hoc headers: %s", exc)
         return {}
