@@ -240,7 +240,7 @@ def write_home_fields(
         ws = wb.sheets["HOME"]
         ws.range("BID").value = process_guid
         # Populate the entire merged customer name range to preserve validation
-        ws.range("D8").merge_area.value = customer_name
+        ws.range("D8:H8").value = customer_name
         if customer_ids:
             cells = ["D10", "E10", "F10", "G10", "H10"]
             for cell, cid in zip(cells, customer_ids):
