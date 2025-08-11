@@ -49,9 +49,9 @@ except ImportError as _e:  # pragma: no cover
     logging.warning("pyodbc missing – SQL disabled (%s)", _e)
 
 try:
-    from .bid_utils import insert_bid_rows, _COLUMNS
+    from .bid_utils import _COLUMNS
 except Exception as _e:  # pragma: no cover
-    insert_bid_rows = None  # type: ignore
+    _COLUMNS = []  # type: ignore
     logging.basicConfig(level=logging.WARNING)
     logging.warning("BID utils unavailable: %s", _e)
 from .constants import LOG_DIR, RETRY_SLEEP
@@ -320,24 +320,6 @@ def process_row(
 
         if op_val != op_code or oa_val == row["ORDERAREAS_VALIDATION_VALUE"]:
             raise FlowError("Validation failed", work_completed=False)
-
-        if bid_guid and insert_bid_rows:
-            start = time.perf_counter()
-            rows = _fetch_bid_rows(bid_guid, log)
-            fetch_time = time.perf_counter() - start
-            log.info("Fetched %d BID rows in %.3fs", len(rows), fetch_time)
-            headers = _fetch_adhoc_headers(bid_guid, log)
-            if rows:
-                start = time.perf_counter()
-                insert_bid_rows(dst_path, rows, log, headers)
-                ins_time = time.perf_counter() - start
-                log.info(
-                    "Batch inserted %d BID rows in %.3fs",
-                    len(rows),
-                    ins_time,
-                )
-            else:
-                log.info("No BID rows fetched – skipping insert")
 
         if upload:
             ctx = sp_ctx(row["CLIENT_DEST_SITE"])
