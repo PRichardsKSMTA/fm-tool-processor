@@ -284,6 +284,9 @@ def test_update_adhoc_headers(monkeypatch, tmp_path, caplog):
         def resize(self, _r, _c):
             return self
 
+        def get_address(self, *_args):
+            return "A1"
+
         @property
         def value(self):
             return (tuple(self.sheet.headers),)
@@ -390,11 +393,11 @@ def test_update_adhoc_headers(monkeypatch, tmp_path, caplog):
         {"adhoc info1": "X1", "ADHOCINFO2": "X2", "ADHOCINFO11": "Z"},
         log,
     )
-    assert sheet.headers[13] == "X1"
-    assert sheet.headers[14] == "X2"
+    assert sheet.headers[sheet.start] == "X1"
+    assert sheet.headers[sheet.start + 1] == "X2"
     assert "Received custom headers" in caplog.text
-    assert "Examining N1: adhoc_info1" in caplog.text
-    assert "Replacing adhoc_info1 with X1" in caplog.text
-    assert "Examining O1: ADHOC_INFO2" in caplog.text
+    assert "Examining O1: ADHOC_INFO1" in caplog.text
+    assert "Replacing ADHOC_INFO1 with X1" in caplog.text
+    assert "Examining P1: ADHOC_INFO2" in caplog.text
     assert "Replacing ADHOC_INFO2 with X2" in caplog.text
     assert "No matching column for custom header ADHOCINFO11" in caplog.text
