@@ -35,8 +35,9 @@ def test_insert_bid_rows_writes_rows(monkeypatch, tmp_path, caplog):
             self.Rows = types.SimpleNamespace(Count=1)
 
         def Cells(self, _row, _col):
-            end = lambda _dir: types.SimpleNamespace(Row=1)
-            return types.SimpleNamespace(End=end)
+            return types.SimpleNamespace(
+                End=lambda _dir: types.SimpleNamespace(Row=1),
+            )
 
     class FakeRange:
         def __init__(self):
@@ -124,12 +125,18 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
     calls: list[str] = []
 
     class FakeApi:
-        def __init__(self):
+        def __init__(self, last_col):
             self.Rows = types.SimpleNamespace(Count=1)
+            self.Columns = types.SimpleNamespace(Count=last_col)
+            self._last_col = last_col
 
         def Cells(self, _row, _col):
-            end = lambda _dir: types.SimpleNamespace(Row=1)
-            return types.SimpleNamespace(End=end)
+            return types.SimpleNamespace(
+                End=lambda _dir: types.SimpleNamespace(
+                    Row=1,
+                    Column=self._last_col,
+                ),
+            )
 
     class FakeHeaderRange:
         def __init__(self, sheet):
@@ -147,7 +154,10 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
 
         @value.setter
         def value(self, val):
-            self.sheet.headers = val[0] if val and isinstance(val[0], list) else val
+            if val and isinstance(val[0], list):
+                self.sheet.headers = val[0]
+            else:
+                self.sheet.headers = val
 
     class FakeDataRange:
         def __init__(self):
@@ -167,10 +177,10 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
 
     class FakeSheet:
         def __init__(self):
-            self.api = FakeApi()
             self.headers = bid_utils._COLUMNS.copy()
             self.headers[13] = " adhoc_info1 "
             self.headers[15] = "AdHoC_Info3  "
+            self.api = FakeApi(len(self.headers))
 
         def range(self, addr):
             if addr == (1, 1):
@@ -207,7 +217,12 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
     monkeypatch.setattr(
         bid_utils,
         "xw",
-        types.SimpleNamespace(App=FakeApp),
+        types.SimpleNamespace(
+            App=FakeApp,
+            constants=types.SimpleNamespace(
+                Direction=types.SimpleNamespace(xlToLeft=1)
+            ),
+        ),
         raising=False,
     )
     monkeypatch.setattr(
@@ -252,22 +267,38 @@ def test_update_adhoc_headers(monkeypatch, tmp_path):
         def resize(self, _r, _c):
             return self
 
-        def expand(self, _dir):
-            return self
-
         @property
         def value(self):
             return (tuple(self.sheet.headers),)
 
         @value.setter
         def value(self, val):
-            self.sheet.headers = val[0] if val and isinstance(val[0], list) else val
+            if val and isinstance(val[0], list):
+                self.sheet.headers = val[0]
+            else:
+                self.sheet.headers = val
+
+    class FakeApi:
+        def __init__(self, headers):
+            self.Rows = types.SimpleNamespace(Count=1)
+            self.Columns = types.SimpleNamespace(Count=len(headers))
+            self._last_col = len(headers)
+
+        def Cells(self, _row, _col):
+            return types.SimpleNamespace(
+                End=lambda _dir: types.SimpleNamespace(
+                    Row=1,
+                    Column=self._last_col,
+                ),
+            )
 
     class FakeSheet:
         def __init__(self):
-            self.headers = bid_utils._COLUMNS.copy()
-            self.headers[13] = "adhoc_info1"
-            self.headers[14] = "ADHOC_INFO2"
+            headers = bid_utils._COLUMNS.copy()
+            headers.insert(5, "")
+            self.start = headers.index("ADHOC_INFO1")
+            self.headers = headers
+            self.api = FakeApi(self.headers)
 
         def range(self, addr):
             assert addr == (1, 1)
@@ -303,7 +334,12 @@ def test_update_adhoc_headers(monkeypatch, tmp_path):
     monkeypatch.setattr(
         bid_utils,
         "xw",
-        types.SimpleNamespace(App=FakeApp),
+        types.SimpleNamespace(
+            App=FakeApp,
+            constants=types.SimpleNamespace(
+                Direction=types.SimpleNamespace(xlToLeft=1)
+            ),
+        ),
         raising=False,
     )
     monkeypatch.setattr(
@@ -317,8 +353,7 @@ def test_update_adhoc_headers(monkeypatch, tmp_path):
     )
 
     log = logging.getLogger("test")
-    bid_utils.update_adhoc_headers(
-        wb_path, {"adhoc info1": "X1", "ADHOCINFO2": "X2"}, log
-    )
-    assert sheet.headers[13] == "X1"
-    assert sheet.headers[14] == "X2"
+    mapping = {f"adhoc info{i}": f"X{i}" for i in range(1, 11)}
+    bid_utils.update_adhoc_headers(wb_path, mapping, log)
+    for i in range(10):
+        assert sheet.headers[sheet.start + i] == f"X{i + 1}"
