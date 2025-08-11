@@ -70,7 +70,7 @@ def update_adhoc_headers(
         except Exception:
             log.error("%s sheet not found in %s", _TARGET_SHEET, wb_path)
             return
-        header_rng = ws.range((1, 1)).resize(1, len(_COLUMNS))
+        header_rng = ws.range((1, 1)).expand("right")
         values = header_rng.value
         if isinstance(values, Sequence) and not isinstance(values, str):
             outer = list(values)
@@ -80,12 +80,17 @@ def update_adhoc_headers(
                 and not isinstance(outer[0], str)
             )
             row = list(outer[0]) if nested else outer
-            norm = {str(k).strip().upper(): v for k, v in adhoc_headers.items()}
-            mapped_row = []
-            for v in row:
-                key = str(v).strip().upper()
-                mapped_row.append(norm.get(key, v))
-            header_rng.value = [mapped_row] if nested else mapped_row
+
+            def _norm(val: object) -> str:
+                return str(val).strip().upper().replace("_", "").replace(" ", "")
+
+            norm_map = {_norm(k): v for k, v in adhoc_headers.items()}
+            for i, cell_val in enumerate(row):
+                key = _norm(cell_val)
+                if key in norm_map:
+                    row[i] = norm_map[key]
+
+            header_rng.value = [row] if nested else row
         wb.save()
     finally:
         if wb is not None:
