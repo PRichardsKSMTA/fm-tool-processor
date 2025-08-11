@@ -32,9 +32,26 @@ def test_write_home_fields(monkeypatch, tmp_path):
     pc = SimpleNamespace(CoInitialize=MagicMock(), CoUninitialize=MagicMock())
     monkeypatch.setattr(excel_utils, "pythoncom", pc)
 
+    class MergeArea:
+        def __init__(self, cell):
+            self._cell = cell
+
+        @property
+        def value(self):
+            return self._cell.value
+
+        @value.setter
+        def value(self, v):
+            self._cell.value = v
+
+    cust_cell = SimpleNamespace(value=None)
+    validation_obj = object()
+    cust_cell.api = SimpleNamespace(Validation=validation_obj)
+    cust_cell.merge_area = MergeArea(cust_cell)
+
     cells = {
         "BID": SimpleNamespace(value=None),
-        "D8": SimpleNamespace(value=None),
+        "D8": cust_cell,
         "D10": SimpleNamespace(value=None),
         "E10": SimpleNamespace(value=None),
         "F10": SimpleNamespace(value=None),
@@ -60,6 +77,8 @@ def test_write_home_fields(monkeypatch, tmp_path):
     excel_utils.write_home_fields(tmp_path / "wb.xlsx", "pg", "cust", ids)
     assert cells["BID"].value == "pg"
     assert cells["D8"].value == "cust"
+    assert cells["D8"].merge_area.value == "cust"
+    assert cells["D8"].api.Validation is validation_obj
     assert cells["D10"].value == "c1"
     assert cells["E10"].value == "c2"
     assert cells["F10"].value == "c3"
