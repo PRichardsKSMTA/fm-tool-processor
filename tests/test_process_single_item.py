@@ -83,7 +83,12 @@ def test_run_flow_success(payload):
         return_value=["i1", "i2"],
     ) as cid_mock, patch(
         "fm_tool_core.process_fm_tool.write_home_fields",
-    ) as write_mock:
+    ) as write_mock, patch(
+        "fm_tool_core.process_fm_tool._fetch_adhoc_headers",
+        return_value={"ADHOC_INFO1": "A"},
+    ) as adhoc_mock, patch(
+        "fm_tool_core.process_fm_tool.update_adhoc_headers",
+    ) as upd_mock:
         result = core.run_flow(payload)
     macro.assert_called_once()
     args_tuple = macro.call_args[0][1]
@@ -94,6 +99,8 @@ def test_run_flow_success(payload):
     write_mock.assert_called_once_with(
         ANY, payload["BID-Payload"], "ACME", ["i1", "i2"]
     )
+    adhoc_mock.assert_called_once_with(payload["BID-Payload"], ANY)
+    upd_mock.assert_called_once_with(ANY, {"ADHOC_INFO1": "A"}, ANY)
     assert result["Out_boolWorkcompleted"] is True
     assert result["Out_strWorkExceptionMessage"] == ""
 
@@ -117,10 +124,16 @@ def test_run_flow_without_bid_payload(payload):
         "fm_tool_core.process_fm_tool._fetch_customer_ids"
     ) as cid_mock, patch(
         "fm_tool_core.process_fm_tool.write_home_fields",
-    ) as write_mock:
+    ) as write_mock, patch(
+        "fm_tool_core.process_fm_tool._fetch_adhoc_headers",
+    ) as adhoc_mock, patch(
+        "fm_tool_core.process_fm_tool.update_adhoc_headers",
+    ) as upd_mock:
         result = core.run_flow(payload)
     macro.assert_called_once()
     assert len(macro.call_args[0][1]) == 3
     write_mock.assert_called_once_with(ANY, None, "ACME", None)
     cid_mock.assert_not_called()
+    adhoc_mock.assert_not_called()
+    upd_mock.assert_not_called()
     assert result["Out_boolWorkcompleted"] is True

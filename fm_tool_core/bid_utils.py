@@ -50,6 +50,59 @@ _REQUIRED = {
 _TARGET_SHEET = "RFP"  # ← changed from “BID”
 
 
+def update_adhoc_headers(
+    wb_path: Path, adhoc_headers: dict[str, str], log: logging.Logger
+) -> None:
+    """Replace ADHOC_INFO* headers in the RFP sheet of *wb_path*."""
+    if not adhoc_headers:
+        return
+    if xw is None:
+        log.error("xlwings is required for header updates")
+        return
+    pythoncom.CoInitialize()
+    app = xw.App(visible=VISIBLE_EXCEL, add_book=False)  # type: ignore
+    app.api.DisplayAlerts = False
+    wb = None
+    try:
+        wb = app.books.open(str(wb_path))
+        try:
+            ws = wb.sheets[_TARGET_SHEET]
+        except Exception:
+            log.error("%s sheet not found in %s", _TARGET_SHEET, wb_path)
+            return
+        header_rng = ws.range((1, 1)).resize(1, len(_COLUMNS))
+        values = header_rng.value
+        if isinstance(values, Sequence) and not isinstance(values, str):
+            outer = list(values)
+            nested = (
+                bool(outer)
+                and isinstance(outer[0], Sequence)
+                and not isinstance(outer[0], str)
+            )
+            row = list(outer[0]) if nested else outer
+            norm = {str(k).strip().upper(): v for k, v in adhoc_headers.items()}
+            mapped_row = []
+            for v in row:
+                key = str(v).strip().upper()
+                mapped_row.append(norm.get(key, v))
+            header_rng.value = [mapped_row] if nested else mapped_row
+        wb.save()
+    finally:
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
+        try:
+            app.kill()
+        except Exception:
+            pass
+        try:
+            pythoncom.CoUninitialize()
+        except Exception:
+            pass
+
+
 def insert_bid_rows(
     wb_path: Path,
     rows: Iterable[dict[str, Any]],
@@ -84,6 +137,9 @@ def insert_bid_rows(
         log.error("xlwings is required for RFP inserts")
         return
 
+    if adhoc_headers:
+        update_adhoc_headers(wb_path, adhoc_headers, log)
+
     pythoncom.CoInitialize()
     app = xw.App(visible=VISIBLE_EXCEL, add_book=False)  # type: ignore
     app.api.DisplayAlerts = False
@@ -95,24 +151,6 @@ def insert_bid_rows(
         except Exception:
             log.error("%s sheet not found in %s", _TARGET_SHEET, wb_path)
             return
-
-        if adhoc_headers:
-            header_rng = ws.range((1, 1)).resize(1, len(_COLUMNS))
-            values = header_rng.value
-            if isinstance(values, Sequence) and not isinstance(values, str):
-                outer = list(values)
-                nested = (
-                    bool(outer)
-                    and isinstance(outer[0], Sequence)
-                    and not isinstance(outer[0], str)
-                )
-                row = list(outer[0]) if nested else outer
-                norm = {str(k).strip().upper(): v for k, v in adhoc_headers.items()}
-                mapped_row = []
-                for v in row:
-                    key = str(v).strip().upper()
-                    mapped_row.append(norm.get(key, v))
-                header_rng.value = [mapped_row] if nested else mapped_row
 
         # First empty row in column A
         start_row = ws.api.Cells(ws.api.Rows.Count, 1).End(-4162).Row + 1
@@ -144,4 +182,4 @@ def insert_bid_rows(
             pass
 
 
-__all__ = ["insert_bid_rows", "_COLUMNS"]
+__all__ = ["insert_bid_rows", "update_adhoc_headers", "_COLUMNS"]

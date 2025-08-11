@@ -49,9 +49,10 @@ except ImportError as _e:  # pragma: no cover
     logging.warning("pyodbc missing – SQL disabled (%s)", _e)
 
 try:
-    from .bid_utils import _COLUMNS
+    from .bid_utils import _COLUMNS, update_adhoc_headers
 except Exception as _e:  # pragma: no cover
     _COLUMNS = []  # type: ignore
+    update_adhoc_headers = lambda *a, **k: None  # type: ignore
     logging.basicConfig(level=logging.WARNING)
     logging.warning("BID utils unavailable: %s", _e)
 from .constants import LOG_DIR, RETRY_SLEEP
@@ -327,6 +328,9 @@ def process_row(
     if bid_guid is not None:
         cust_ids = _fetch_customer_ids(bid_guid, log)
     write_home_fields(dst_path, bid_guid, row.get("CUSTOMER_NAME"), cust_ids)
+    if bid_guid is not None:
+        adhoc = _fetch_adhoc_headers(bid_guid, log)
+        update_adhoc_headers(dst_path, adhoc, log)
 
     log.info("Waiting for CPU to drop")
     wait_for_cpu(log=log)
