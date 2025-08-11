@@ -120,14 +120,14 @@ def test_run_flow_inserts_bid_rows(payload, caplog):
         return_value=bid_rows,
     ), patch(
         "fm_tool_core.process_fm_tool._fetch_adhoc_headers",
-        return_value={"ADHOC_INFO1": "X1"},
+        return_value={" AdHoc_Info1 ": "X1"},
     ), patch(
         "fm_tool_core.process_fm_tool.insert_bid_rows"
     ) as insert_mock:
         with caplog.at_level(logging.INFO):
             result = core.run_flow(payload)
     insert_mock.assert_called_once()
-    assert insert_mock.call_args[0][3] == {"ADHOC_INFO1": "X1"}
+    assert insert_mock.call_args[0][3] == {" AdHoc_Info1 ": "X1"}
     macro.assert_called_once()
     assert len(macro.call_args[0][1]) == 4
     assert any("Fetched 1 BID rows in" in rec.message for rec in caplog.records)

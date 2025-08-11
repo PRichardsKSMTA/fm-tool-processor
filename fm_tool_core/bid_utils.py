@@ -107,7 +107,11 @@ def insert_bid_rows(
                     and not isinstance(outer[0], str)
                 )
                 row = list(outer[0]) if nested else outer
-                mapped_row = [adhoc_headers.get(str(v), v) for v in row]
+                norm = {str(k).strip().upper(): v for k, v in adhoc_headers.items()}
+                mapped_row = []
+                for v in row:
+                    key = str(v).strip().upper()
+                    mapped_row.append(norm.get(key, v))
                 header_rng.value = [mapped_row] if nested else mapped_row
 
         # First empty row in column A

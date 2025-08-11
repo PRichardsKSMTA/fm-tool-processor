@@ -166,6 +166,8 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
         def __init__(self):
             self.api = FakeApi()
             self.headers = bid_utils._COLUMNS.copy()
+            self.headers[13] = " adhoc_info1 "
+            self.headers[15] = "AdHoC_Info3  "
 
         def range(self, addr):
             if addr == (1, 1):
@@ -227,7 +229,7 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
         wb_path,
         rows,
         log,
-        adhoc_headers={"ADHOC_INFO1": "X1", "ADHOC_INFO3": "X3"},
+        adhoc_headers={" AdHoC_inFo1 ": "X1", "adhoc_info3": "X3"},
     )
     assert calls == ["write"]
     assert sheet.headers[13] == "X1"
