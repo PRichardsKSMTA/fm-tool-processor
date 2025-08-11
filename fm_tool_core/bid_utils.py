@@ -48,12 +48,13 @@ _REQUIRED = {
 }
 
 _TARGET_SHEET = "RFP"  # ← changed from “BID”
+_HEADER_SHEET = "BID"
 
 
 def update_adhoc_headers(
     wb_path: Path, adhoc_headers: dict[str, str], log: logging.Logger
 ) -> None:
-    """Replace ADHOC_INFO* headers in the RFP sheet of *wb_path*."""
+    """Write custom ADHOC_INFO labels to row 7 of the BID sheet."""
     log.debug("Received custom headers: %s", adhoc_headers)
     if not adhoc_headers:
         return
@@ -67,16 +68,16 @@ def update_adhoc_headers(
     try:
         wb = app.books.open(str(wb_path))
         try:
-            ws = wb.sheets[_TARGET_SHEET]
+            ws = wb.sheets[_HEADER_SHEET]
         except Exception:
-            log.error("%s sheet not found in %s", _TARGET_SHEET, wb_path)
+            log.error("%s sheet not found in %s", _HEADER_SHEET, wb_path)
             return
         last = (
-            ws.api.Cells(1, ws.api.Columns.Count)
+            ws.api.Cells(6, ws.api.Columns.Count)
             .End(xw.constants.Direction.xlToLeft)
             .Column
         )
-        header_rng = ws.range((1, 1)).resize(1, last)
+        header_rng = ws.range((6, 1)).resize(1, last)
         values = header_rng.value
         if isinstance(values, Sequence) and not isinstance(values, str):
             outer = list(values)
@@ -94,19 +95,19 @@ def update_adhoc_headers(
             orig_map = {_norm(k): k for k in adhoc_headers}
             matched: set[str] = set()
             for i, cell_val in enumerate(row):
-                addr = ws.range((1, i + 1)).get_address(False, False)
+                addr = ws.range((6, i + 1)).get_address(False, False)
                 log.debug("Examining %s: %s", addr, cell_val)
                 key = _norm(cell_val)
                 if key in norm_map:
-                    log.debug("Replacing %s with %s", cell_val, norm_map[key])
-                    row[i] = norm_map[key]
+                    log.debug("Writing %s to row 7 column %d", norm_map[key], i + 1)
+                    ws.range((7, i + 1)).value = norm_map[key]
                     matched.add(key)
+                else:
+                    ws.range((7, i + 1)).value = ""
 
             for key, orig in orig_map.items():
                 if key not in matched:
                     log.debug("No matching column for custom header %s", orig)
-
-            header_rng.value = [row] if nested else row
         wb.save()
     finally:
         if wb is not None:
