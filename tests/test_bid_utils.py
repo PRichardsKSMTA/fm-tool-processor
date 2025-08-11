@@ -116,7 +116,7 @@ def test_insert_bid_rows_writes_rows(monkeypatch, tmp_path, caplog):
     assert any("RFP sheet" in r.message for r in caplog.records)
 
 
-def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
+def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path, caplog):
     from fm_tool_core import bid_utils
 
     wb_path = tmp_path / "wb.xlsx"
@@ -149,6 +149,9 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
         def value(self, val):
             self.sheet.headers = val[0] if val and isinstance(val[0], list) else val
 
+        def get_address(self, *_args):
+            return "A1"
+
     class FakeDataRange:
         def __init__(self):
             self._value = None
@@ -165,6 +168,14 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
             calls.append("write")
             self._value = val
 
+    class FakeCell:
+        def __init__(self, addr):
+            self.addr = addr
+
+        def get_address(self, *_args):
+            row, col = self.addr
+            return f"{chr(ord('A') + col - 1)}{row}"
+
     class FakeSheet:
         def __init__(self):
             self.api = FakeApi()
@@ -175,6 +186,8 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
         def range(self, addr):
             if addr == (1, 1):
                 return FakeHeaderRange(self)
+            if addr[0] == 1:
+                return FakeCell(addr)
             return FakeDataRange()
 
     sheet = FakeSheet()
@@ -228,6 +241,7 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
         }
     ]
     log = logging.getLogger("test")
+    caplog.set_level(logging.DEBUG)
     bid_utils.insert_bid_rows(
         wb_path,
         rows,
@@ -237,9 +251,12 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
     assert calls == ["write"]
     assert sheet.headers[13] == "X1"
     assert sheet.headers[15] == "X3"
+    assert "Received custom headers" in caplog.text
+    assert "Replacing  adhoc_info1  with X1" in caplog.text
+    assert "Replacing AdHoC_Info3   with X3" in caplog.text
 
 
-def test_update_adhoc_headers(monkeypatch, tmp_path):
+def test_update_adhoc_headers(monkeypatch, tmp_path, caplog):
     from fm_tool_core import bid_utils
 
     wb_path = tmp_path / "wb.xlsx"
@@ -263,6 +280,17 @@ def test_update_adhoc_headers(monkeypatch, tmp_path):
         def value(self, val):
             self.sheet.headers = val[0] if val and isinstance(val[0], list) else val
 
+        def get_address(self, *_args):
+            return "A1"
+
+    class FakeCell:
+        def __init__(self, addr):
+            self.addr = addr
+
+        def get_address(self, *_args):
+            row, col = self.addr
+            return f"{chr(ord('A') + col - 1)}{row}"
+
     class FakeSheet:
         def __init__(self):
             self.headers = bid_utils._COLUMNS.copy()
@@ -270,8 +298,10 @@ def test_update_adhoc_headers(monkeypatch, tmp_path):
             self.headers[14] = "ADHOC_INFO2"
 
         def range(self, addr):
-            assert addr == (1, 1)
-            return FakeHeaderRange(self)
+            if addr == (1, 1):
+                return FakeHeaderRange(self)
+            assert addr[0] == 1
+            return FakeCell(addr)
 
     sheet = FakeSheet()
 
@@ -317,8 +347,17 @@ def test_update_adhoc_headers(monkeypatch, tmp_path):
     )
 
     log = logging.getLogger("test")
+    caplog.set_level(logging.DEBUG)
     bid_utils.update_adhoc_headers(
-        wb_path, {"adhoc info1": "X1", "ADHOCINFO2": "X2"}, log
+        wb_path,
+        {"adhoc info1": "X1", "ADHOCINFO2": "X2", "ADHOCINFO11": "Z"},
+        log,
     )
     assert sheet.headers[13] == "X1"
     assert sheet.headers[14] == "X2"
+    assert "Received custom headers" in caplog.text
+    assert "Examining N1: adhoc_info1" in caplog.text
+    assert "Replacing adhoc_info1 with X1" in caplog.text
+    assert "Examining O1: ADHOC_INFO2" in caplog.text
+    assert "Replacing ADHOC_INFO2 with X2" in caplog.text
+    assert "No matching column for custom header ADHOCINFO11" in caplog.text
