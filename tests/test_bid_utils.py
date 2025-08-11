@@ -138,6 +138,9 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
         def resize(self, _r, _c):
             return self
 
+        def expand(self, _dir):
+            return self
+
         @property
         def value(self):
             return (tuple(self.sheet.headers),)
@@ -229,7 +232,7 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
         wb_path,
         rows,
         log,
-        adhoc_headers={" AdHoC_inFo1 ": "X1", "adhoc_info3": "X3"},
+        adhoc_headers={" AdHoC inFo1 ": "X1", "adhocinfo3": "X3"},
     )
     assert calls == ["write"]
     assert sheet.headers[13] == "X1"
@@ -247,6 +250,9 @@ def test_update_adhoc_headers(monkeypatch, tmp_path):
             self.sheet = sheet
 
         def resize(self, _r, _c):
+            return self
+
+        def expand(self, _dir):
             return self
 
         @property
@@ -312,7 +318,7 @@ def test_update_adhoc_headers(monkeypatch, tmp_path):
 
     log = logging.getLogger("test")
     bid_utils.update_adhoc_headers(
-        wb_path, {"ADHOC_INFO1": "X1", "adhoc_info2": "X2"}, log
+        wb_path, {"adhoc info1": "X1", "ADHOCINFO2": "X2"}, log
     )
     assert sheet.headers[13] == "X1"
     assert sheet.headers[14] == "X2"
