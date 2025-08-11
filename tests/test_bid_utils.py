@@ -234,3 +234,85 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
     assert calls == ["write"]
     assert sheet.headers[13] == "X1"
     assert sheet.headers[15] == "X3"
+
+
+def test_update_adhoc_headers(monkeypatch, tmp_path):
+    from fm_tool_core import bid_utils
+
+    wb_path = tmp_path / "wb.xlsx"
+    wb_path.touch()
+
+    class FakeHeaderRange:
+        def __init__(self, sheet):
+            self.sheet = sheet
+
+        def resize(self, _r, _c):
+            return self
+
+        @property
+        def value(self):
+            return (tuple(self.sheet.headers),)
+
+        @value.setter
+        def value(self, val):
+            self.sheet.headers = val[0] if val and isinstance(val[0], list) else val
+
+    class FakeSheet:
+        def __init__(self):
+            self.headers = bid_utils._COLUMNS.copy()
+            self.headers[13] = "adhoc_info1"
+            self.headers[14] = "ADHOC_INFO2"
+
+        def range(self, addr):
+            assert addr == (1, 1)
+            return FakeHeaderRange(self)
+
+    sheet = FakeSheet()
+
+    class FakeBook:
+        def __init__(self):
+            self.sheets = {"RFP": sheet}
+
+        def save(self):
+            pass
+
+        def close(self):
+            pass
+
+    def fake_open(_path):
+        return FakeBook()
+
+    class FakeBooks:
+        def open(self, path):
+            return fake_open(path)
+
+    class FakeApp:
+        def __init__(self, *args, **kwargs):
+            self.api = types.SimpleNamespace(DisplayAlerts=False)
+            self.books = FakeBooks()
+
+        def kill(self):
+            pass
+
+    monkeypatch.setattr(
+        bid_utils,
+        "xw",
+        types.SimpleNamespace(App=FakeApp),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        bid_utils,
+        "pythoncom",
+        types.SimpleNamespace(
+            CoInitialize=lambda: None,
+            CoUninitialize=lambda: None,
+        ),
+        raising=False,
+    )
+
+    log = logging.getLogger("test")
+    bid_utils.update_adhoc_headers(
+        wb_path, {"ADHOC_INFO1": "X1", "adhoc_info2": "X2"}, log
+    )
+    assert sheet.headers[13] == "X1"
+    assert sheet.headers[14] == "X2"
