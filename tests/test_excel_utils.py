@@ -32,15 +32,18 @@ def test_write_home_fields(monkeypatch, tmp_path):
     pc = SimpleNamespace(CoInitialize=MagicMock(), CoUninitialize=MagicMock())
     monkeypatch.setattr(excel_utils, "pythoncom", pc)
 
-    bid_rng = SimpleNamespace(value=None)
-    d8_rng = SimpleNamespace(value=None)
+    cells = {
+        "BID": SimpleNamespace(value=None),
+        "D8": SimpleNamespace(value=None),
+        "D10": SimpleNamespace(value=None),
+        "E10": SimpleNamespace(value=None),
+        "F10": SimpleNamespace(value=None),
+        "G10": SimpleNamespace(value=None),
+        "H10": SimpleNamespace(value=None),
+    }
 
     def range_side_effect(addr):
-        if addr == "BID":
-            return bid_rng
-        if addr == "D8":
-            return d8_rng
-        raise AssertionError
+        return cells[addr]
 
     sheet = SimpleNamespace(range=MagicMock(side_effect=range_side_effect))
     wb = SimpleNamespace(sheets={"HOME": sheet}, save=MagicMock(), close=MagicMock())
@@ -53,9 +56,15 @@ def test_write_home_fields(monkeypatch, tmp_path):
     xw_mock = SimpleNamespace(App=MagicMock(return_value=app))
     monkeypatch.setattr(excel_utils, "xw", xw_mock)
 
-    excel_utils.write_home_fields(tmp_path / "wb.xlsx", "pg", "cust")
-    assert bid_rng.value == "pg"
-    assert d8_rng.value == "cust"
+    ids = ["c1", "c2", "c3", "c4", "c5"]
+    excel_utils.write_home_fields(tmp_path / "wb.xlsx", "pg", "cust", ids)
+    assert cells["BID"].value == "pg"
+    assert cells["D8"].value == "cust"
+    assert cells["D10"].value == "c1"
+    assert cells["E10"].value == "c2"
+    assert cells["F10"].value == "c3"
+    assert cells["G10"].value == "c4"
+    assert cells["H10"].value == "c5"
     wb.save.assert_called_once_with()
     wb.close.assert_called_once_with()
     app.kill.assert_called_once_with()

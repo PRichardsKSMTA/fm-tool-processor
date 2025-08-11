@@ -79,6 +79,9 @@ def test_run_flow_success(payload):
     ), patch(
         "fm_tool_core.process_fm_tool._fetch_bid_rows",
     ) as fetch_mock, patch(
+        "fm_tool_core.process_fm_tool._fetch_customer_ids",
+        return_value=["i1", "i2"],
+    ) as cid_mock, patch(
         "fm_tool_core.process_fm_tool.write_home_fields",
     ) as write_mock:
         result = core.run_flow(payload)
@@ -87,7 +90,10 @@ def test_run_flow_success(payload):
     assert len(args_tuple) == 4
     assert args_tuple[-1] == payload["BID-Payload"]
     fetch_mock.assert_not_called()
-    write_mock.assert_called_once_with(ANY, payload["BID-Payload"], "ACME")
+    cid_mock.assert_called_once_with(payload["BID-Payload"], ANY)
+    write_mock.assert_called_once_with(
+        ANY, payload["BID-Payload"], "ACME", ["i1", "i2"]
+    )
     assert result["Out_boolWorkcompleted"] is True
     assert result["Out_strWorkExceptionMessage"] == ""
 
@@ -108,10 +114,13 @@ def test_run_flow_without_bid_payload(payload):
         "fm_tool_core.process_fm_tool.sharepoint_file_exists",
         return_value=False,
     ), patch(
+        "fm_tool_core.process_fm_tool._fetch_customer_ids"
+    ) as cid_mock, patch(
         "fm_tool_core.process_fm_tool.write_home_fields",
     ) as write_mock:
         result = core.run_flow(payload)
     macro.assert_called_once()
     assert len(macro.call_args[0][1]) == 3
-    write_mock.assert_called_once_with(ANY, None, "ACME")
+    write_mock.assert_called_once_with(ANY, None, "ACME", None)
+    cid_mock.assert_not_called()
     assert result["Out_boolWorkcompleted"] is True

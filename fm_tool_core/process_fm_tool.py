@@ -272,6 +272,38 @@ def _fetch_adhoc_headers(process_guid: str, log: logging.Logger) -> Dict[str, st
                 pass
 
 
+def _fetch_customer_ids(process_guid: str, log: logging.Logger) -> List[str]:
+    """Return up to five CUSTOMER_IDs for *process_guid*."""
+    if pyodbc is None:
+        log.info("(SQL disabled) would fetch CUSTOMER_ID for %s", process_guid)
+        return []
+
+    conn = None
+    try:
+        conn = pyodbc.connect(_sql_conn_str(), timeout=10)
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT TOP 1 CUSTOMER_ID FROM dbo.RFP_OBJECT_DATA "
+                "WHERE PROCESS_GUID = ?",
+                (process_guid,),
+            )
+            row = cur.fetchone()
+            if not row or not row[0]:
+                return []
+            raw = str(row[0])
+            parts = [p.strip() for p in raw.replace(";", ",").split(",")]
+            return [p for p in parts if p][:5]
+    except Exception as exc:
+        log.warning("Failed to fetch CUSTOMER_ID: %s", exc)
+        return []
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 # ───────────────────────────── ROW WORKER ──────────────────────────────────
 def process_row(
     row: Dict[str, Any],
@@ -291,7 +323,10 @@ def process_row(
     )
     log.info("Template copied to %s", dst_path)
 
-    write_home_fields(dst_path, bid_guid, row.get("CUSTOMER_NAME"))
+    cust_ids: List[str] | None = None
+    if bid_guid is not None:
+        cust_ids = _fetch_customer_ids(bid_guid, log)
+    write_home_fields(dst_path, bid_guid, row.get("CUSTOMER_NAME"), cust_ids)
 
     log.info("Waiting for CPU to drop")
     wait_for_cpu(log=log)
