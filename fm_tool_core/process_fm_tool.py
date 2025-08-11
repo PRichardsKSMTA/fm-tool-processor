@@ -55,7 +55,13 @@ except Exception as _e:  # pragma: no cover
     logging.basicConfig(level=logging.WARNING)
     logging.warning("BID utils unavailable: %s", _e)
 from .constants import LOG_DIR, RETRY_SLEEP
-from .excel_utils import copy_template, kill_orphan_excels, read_cell, run_excel_macro
+from .excel_utils import (
+    copy_template,
+    kill_orphan_excels,
+    read_cell,
+    run_excel_macro,
+    write_home_fields,
+)
 from .exceptions import FlowError
 from .sharepoint_utils import sp_ctx, sharepoint_file_exists, sharepoint_upload
 
@@ -284,6 +290,8 @@ def process_row(
         template_src, root, f"{Path(row['NEW_EXCEL_FILENAME']).stem}_{run_id}.xlsm", log
     )
     log.info("Template copied to %s", dst_path)
+
+    write_home_fields(dst_path, bid_guid, row.get("CUSTOMER_NAME"))
 
     log.info("Waiting for CPU to drop")
     wait_for_cpu(log=log)

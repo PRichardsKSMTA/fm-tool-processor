@@ -222,6 +222,38 @@ def run_excel_macro(wb_path: Path, args: tuple, log: logging.Logger):
         raise err
 
 
+def write_home_fields(
+    wb_path: Path, process_guid: str | None, customer_name: str | None
+) -> None:
+    """Write basic HOME sheet fields to *wb_path*."""
+    if xw is None:
+        raise FlowError("xlwings is required", work_completed=False)
+    pythoncom.CoInitialize()
+    app = xw.App(visible=VISIBLE_EXCEL, add_book=False)  # type: ignore
+    app.api.DisplayFullScreen = False
+    wb = None
+    try:
+        wb = app.books.open(str(wb_path))
+        ws = wb.sheets["HOME"]
+        ws.range("BID").value = process_guid
+        ws.range("D8").value = customer_name
+        wb.save()
+    finally:
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
+        try:
+            app.kill()
+        except Exception:
+            pass
+        try:
+            pythoncom.CoUninitialize()
+        except Exception:
+            pass
+
+
 def read_cell(wb_path: Path, col: str, row: str) -> Any:
     if xw is None:
         raise FlowError("xlwings is required", work_completed=False)
@@ -248,5 +280,6 @@ __all__ = [
     "copy_template",
     "wait_ready",
     "run_excel_macro",
+    "write_home_fields",
     "read_cell",
 ]

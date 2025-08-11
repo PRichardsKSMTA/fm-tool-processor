@@ -6,7 +6,7 @@ Mocks heavy external dependencies (Excel & SharePoint) so we can assert that:
 """
 
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 import pytest
 
@@ -55,6 +55,7 @@ def payload(tmp_path):
                 "ORDERAREAS_VALIDATION_COLUMN": "B",
                 "ORDERAREAS_VALIDATION_ROW": "1",
                 "ORDERAREAS_VALIDATION_VALUE": ("Input <> " "Order/Area"),
+                "CUSTOMER_NAME": "ACME",
             }
         ],
         "item/In_boolEnableSharePointUpload": False,
@@ -76,14 +77,17 @@ def test_run_flow_success(payload):
         "fm_tool_core.process_fm_tool.sharepoint_file_exists",
         return_value=False,
     ), patch(
-        "fm_tool_core.process_fm_tool._fetch_bid_rows"
-    ) as fetch_mock:
+        "fm_tool_core.process_fm_tool._fetch_bid_rows",
+    ) as fetch_mock, patch(
+        "fm_tool_core.process_fm_tool.write_home_fields",
+    ) as write_mock:
         result = core.run_flow(payload)
     macro.assert_called_once()
     args_tuple = macro.call_args[0][1]
     assert len(args_tuple) == 4
     assert args_tuple[-1] == payload["BID-Payload"]
     fetch_mock.assert_not_called()
+    write_mock.assert_called_once_with(ANY, payload["BID-Payload"], "ACME")
     assert result["Out_boolWorkcompleted"] is True
     assert result["Out_strWorkExceptionMessage"] == ""
 
@@ -103,8 +107,11 @@ def test_run_flow_without_bid_payload(payload):
     ), patch(
         "fm_tool_core.process_fm_tool.sharepoint_file_exists",
         return_value=False,
-    ):
+    ), patch(
+        "fm_tool_core.process_fm_tool.write_home_fields",
+    ) as write_mock:
         result = core.run_flow(payload)
     macro.assert_called_once()
     assert len(macro.call_args[0][1]) == 3
+    write_mock.assert_called_once_with(ANY, None, "ACME")
     assert result["Out_boolWorkcompleted"] is True
