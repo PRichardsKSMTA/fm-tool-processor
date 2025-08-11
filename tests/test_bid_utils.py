@@ -2,6 +2,72 @@ import logging
 import types
 
 
+class FakeHeaderApi:
+    def __init__(self, last_col: int):
+        self.Columns = types.SimpleNamespace(Count=last_col)
+        self._last_col = last_col
+
+    def Cells(self, _row: int, _col: int):  # pragma: no cover - simple mock
+        return types.SimpleNamespace(
+            End=lambda _dir: types.SimpleNamespace(Column=self._last_col)
+        )
+
+
+class FakeRow6Range:
+    def __init__(self, sheet: "MockBidSheet"):
+        self.sheet = sheet
+
+    def resize(self, _r: int, _c: int):
+        return self
+
+    @property
+    def value(self):  # pragma: no cover - simple mock
+        return (tuple(self.sheet.row6),)
+
+    def get_address(self, *_args):  # pragma: no cover - simple mock
+        return "A6"
+
+
+class FakeRow7Cell:
+    def __init__(self, sheet: "MockBidSheet", col: int):
+        self.sheet = sheet
+        self.col = col
+
+    @property
+    def value(self):  # pragma: no cover - simple mock
+        return self.sheet.row7[self.col - 1]
+
+    @value.setter
+    def value(self, val):  # pragma: no cover - simple mock
+        self.sheet.row7[self.col - 1] = val
+
+
+class FakeCell:
+    def __init__(self, addr: tuple[int, int]):
+        self.addr = addr
+
+    def get_address(self, *_args):  # pragma: no cover - simple mock
+        row, col = self.addr
+        return f"{chr(ord('A') + col - 1)}{row}"
+
+
+class MockBidSheet:
+    def __init__(self):
+        self.row6 = [f"Ad Hoc Info {i}" for i in range(1, 11)]
+        self.row7 = ["" for _ in range(10)]
+        self.api = FakeHeaderApi(len(self.row6))
+
+    def range(self, addr: tuple[int, int]):  # pragma: no cover - simple mock
+        row, col = addr
+        if row == 6 and col == 1:
+            return FakeRow6Range(self)
+        if row == 6:
+            return FakeCell(addr)
+        if row == 7:
+            return FakeRow7Cell(self, col)
+        return FakeCell(addr)
+
+
 def test_insert_bid_rows_early_return(monkeypatch, tmp_path, caplog):
     called = False
 
@@ -156,68 +222,7 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path, caplog):
         def range(self, _addr):
             return FakeDataRange()
 
-    class FakeHeaderApi:
-        def __init__(self, last_col):
-            self.Columns = types.SimpleNamespace(Count=last_col)
-            self._last_col = last_col
-
-        def Cells(self, _row, _col):
-            return types.SimpleNamespace(
-                End=lambda _dir: types.SimpleNamespace(Column=self._last_col),
-            )
-
-    class FakeRow6Range:
-        def __init__(self, sheet):
-            self.sheet = sheet
-
-        def resize(self, _r, _c):
-            return self
-
-        @property
-        def value(self):
-            return (tuple(self.sheet.row6),)
-
-        def get_address(self, *_args):
-            return "A6"
-
-    class FakeRow7Cell:
-        def __init__(self, sheet, col):
-            self.sheet = sheet
-            self.col = col
-
-        @property
-        def value(self):
-            return self.sheet.row7[self.col - 1]
-
-        @value.setter
-        def value(self, val):
-            self.sheet.row7[self.col - 1] = val
-
-    class FakeCell:
-        def __init__(self, addr):
-            self.addr = addr
-
-        def get_address(self, *_args):
-            row, col = self.addr
-            return f"{chr(ord('A') + col - 1)}{row}"
-
-    class HeaderSheet:
-        def __init__(self):
-            self.row6 = ["", "Ad Hoc Info 1", "x", "Ad Hoc Info 3"]
-            self.row7 = ["", "", "", ""]
-            self.api = FakeHeaderApi(len(self.row6))
-
-        def range(self, addr):
-            row, col = addr
-            if row == 6 and col == 1:
-                return FakeRow6Range(self)
-            if row == 6:
-                return FakeCell(addr)
-            if row == 7:
-                return FakeRow7Cell(self, col)
-            return FakeCell(addr)
-
-    header_sheet = HeaderSheet()
+    header_sheet = MockBidSheet()
     data_sheet = FakeSheetRFP()
 
     class FakeBook:
@@ -286,12 +291,12 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path, caplog):
         },
     )
     assert calls == ["write"]
-    assert header_sheet.row7[1] == "X1"
-    assert header_sheet.row7[3] == "X3"
-    assert header_sheet.row7[0] == ""
+    assert header_sheet.row7[0] == "X1"
+    assert header_sheet.row7[2] == "X3"
+    assert header_sheet.row7[1] == ""
     assert "Received custom headers" in caplog.text
-    assert "Writing X1 to row 7 column 2" in caplog.text
-    assert "Writing X3 to row 7 column 4" in caplog.text
+    assert "Writing X1 to row 7 column 1" in caplog.text
+    assert "Writing X3 to row 7 column 3" in caplog.text
     assert "No matching column for custom header ADHOCINFO11" in caplog.text
 
 
@@ -301,68 +306,7 @@ def test_update_adhoc_headers(monkeypatch, tmp_path, caplog):
     wb_path = tmp_path / "wb.xlsx"
     wb_path.touch()
 
-    class FakeHeaderApi:
-        def __init__(self, last_col):
-            self.Columns = types.SimpleNamespace(Count=last_col)
-            self._last_col = last_col
-
-        def Cells(self, _row, _col):
-            return types.SimpleNamespace(
-                End=lambda _dir: types.SimpleNamespace(Column=self._last_col),
-            )
-
-    class FakeRow6Range:
-        def __init__(self, sheet):
-            self.sheet = sheet
-
-        def resize(self, _r, _c):
-            return self
-
-        @property
-        def value(self):
-            return (tuple(self.sheet.row6),)
-
-        def get_address(self, *_args):
-            return "A6"
-
-    class FakeRow7Cell:
-        def __init__(self, sheet, col):
-            self.sheet = sheet
-            self.col = col
-
-        @property
-        def value(self):
-            return self.sheet.row7[self.col - 1]
-
-        @value.setter
-        def value(self, val):
-            self.sheet.row7[self.col - 1] = val
-
-    class FakeCell:
-        def __init__(self, addr):
-            self.addr = addr
-
-        def get_address(self, *_args):
-            row, col = self.addr
-            return f"{chr(ord('A') + col - 1)}{row}"
-
-    class HeaderSheet:
-        def __init__(self):
-            self.row6 = ["Ad Hoc Info 1", "Ad Hoc Info 2", "foo"]
-            self.row7 = ["", "", ""]
-            self.api = FakeHeaderApi(len(self.row6))
-
-        def range(self, addr):
-            row, col = addr
-            if row == 6 and col == 1:
-                return FakeRow6Range(self)
-            if row == 6:
-                return FakeCell(addr)
-            if row == 7:
-                return FakeRow7Cell(self, col)
-            return FakeCell(addr)
-
-    sheet = HeaderSheet()
+    sheet = MockBidSheet()
 
     class FakeBook:
         def __init__(self):
