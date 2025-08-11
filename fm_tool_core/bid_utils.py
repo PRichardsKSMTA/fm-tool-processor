@@ -54,6 +54,7 @@ def update_adhoc_headers(
     wb_path: Path, adhoc_headers: dict[str, str], log: logging.Logger
 ) -> None:
     """Replace ADHOC_INFO* headers in the RFP sheet of *wb_path*."""
+    log.debug("Received custom headers: %s", adhoc_headers)
     if not adhoc_headers:
         return
     if xw is None:
@@ -90,10 +91,20 @@ def update_adhoc_headers(
                 return str(val).strip().upper().replace("_", "").replace(" ", "")
 
             norm_map = {_norm(k): v for k, v in adhoc_headers.items()}
+            orig_map = {_norm(k): k for k in adhoc_headers}
+            matched: set[str] = set()
             for i, cell_val in enumerate(row):
+                addr = ws.range((1, i + 1)).get_address(False, False)
+                log.debug("Examining %s: %s", addr, cell_val)
                 key = _norm(cell_val)
                 if key in norm_map:
+                    log.debug("Replacing %s with %s", cell_val, norm_map[key])
                     row[i] = norm_map[key]
+                    matched.add(key)
+
+            for key, orig in orig_map.items():
+                if key not in matched:
+                    log.debug("No matching column for custom header %s", orig)
 
             header_rng.value = [row] if nested else row
         wb.save()
