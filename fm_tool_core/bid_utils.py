@@ -71,7 +71,12 @@ def update_adhoc_headers(
         except Exception:
             log.error("%s sheet not found in %s", _TARGET_SHEET, wb_path)
             return
-        header_rng = ws.range((1, 1)).expand("right")
+        last = (
+            ws.api.Cells(1, ws.api.Columns.Count)
+            .End(xw.constants.Direction.xlToLeft)
+            .Column
+        )
+        header_rng = ws.range((1, 1)).resize(1, last)
         values = header_rng.value
         if isinstance(values, Sequence) and not isinstance(values, str):
             outer = list(values)
