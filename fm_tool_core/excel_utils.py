@@ -7,7 +7,7 @@ import shutil
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from .constants import (
     OPEN_TO,
@@ -223,7 +223,10 @@ def run_excel_macro(wb_path: Path, args: tuple, log: logging.Logger):
 
 
 def write_home_fields(
-    wb_path: Path, process_guid: str | None, customer_name: str | None
+    wb_path: Path,
+    process_guid: str | None,
+    customer_name: str | None,
+    customer_ids: Sequence[str] | None = None,
 ) -> None:
     """Write basic HOME sheet fields to *wb_path*."""
     if xw is None:
@@ -237,6 +240,10 @@ def write_home_fields(
         ws = wb.sheets["HOME"]
         ws.range("BID").value = process_guid
         ws.range("D8").value = customer_name
+        if customer_ids:
+            cells = ["D10", "E10", "F10", "G10", "H10"]
+            for cell, cid in zip(cells, customer_ids):
+                ws.range(cell).value = cid
         wb.save()
     finally:
         if wb is not None:
