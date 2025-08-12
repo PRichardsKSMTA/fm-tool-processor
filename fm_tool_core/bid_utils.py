@@ -55,7 +55,7 @@ def update_adhoc_headers(
     wb_path: Path, adhoc_headers: dict[str, str], log: logging.Logger
 ) -> None:
     """Write custom ADHOC_INFO labels to row 7 of the BID sheet."""
-    log.debug("Received custom headers: %s", adhoc_headers)
+    log.info("Received custom headers: %s", adhoc_headers)
     if not adhoc_headers:
         return
     if xw is None:
@@ -94,20 +94,31 @@ def update_adhoc_headers(
             norm_map = {_norm(k): v for k, v in adhoc_headers.items()}
             orig_map = {_norm(k): k for k in adhoc_headers}
             matched: set[str] = set()
+            written: list[str] = []
+            blanks: list[str] = []
             for i, cell_val in enumerate(row):
                 addr = ws.range((6, i + 1)).get_address(False, False)
-                log.debug("Examining %s: %s", addr, cell_val)
                 key = _norm(cell_val)
                 if key in norm_map:
-                    log.debug("Writing %s to row 7 column %d", norm_map[key], i + 1)
                     ws.range((7, i + 1)).value = norm_map[key]
                     matched.add(key)
+                    written.append(addr)
                 else:
                     ws.range((7, i + 1)).value = ""
+                    blanks.append(addr)
 
-            for key, orig in orig_map.items():
-                if key not in matched:
-                    log.debug("No matching column for custom header %s", orig)
+            unmatched = [orig for key, orig in orig_map.items() if key not in matched]
+            if written or blanks:
+                log.info(
+                    "Custom headers written to %s; blank headers for %s",
+                    ", ".join(written) or "none",
+                    ", ".join(blanks) or "none",
+                )
+            if unmatched:
+                log.info(
+                    "No matching column for custom headers %s",
+                    ", ".join(unmatched),
+                )
         wb.save()
     finally:
         if wb is not None:

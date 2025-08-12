@@ -279,7 +279,7 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path, caplog):
         }
     ]
     log = logging.getLogger("test")
-    caplog.set_level(logging.DEBUG)
+    caplog.set_level(logging.INFO)
     bid_utils.insert_bid_rows(
         wb_path,
         rows,
@@ -295,9 +295,9 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path, caplog):
     assert header_sheet.row7[2] == "X3"
     assert header_sheet.row7[1] == ""
     assert "Received custom headers" in caplog.text
-    assert "Writing X1 to row 7 column 1" in caplog.text
-    assert "Writing X3 to row 7 column 3" in caplog.text
-    assert "No matching column for custom header ADHOCINFO11" in caplog.text
+    assert "Custom headers written to A6, C6" in caplog.text
+    assert "blank headers for B6" in caplog.text
+    assert "No matching column for custom headers ADHOCINFO11" in caplog.text
 
 
 def test_update_adhoc_headers(monkeypatch, tmp_path, caplog):
@@ -356,7 +356,7 @@ def test_update_adhoc_headers(monkeypatch, tmp_path, caplog):
 
     log = logging.getLogger("test")
 
-    caplog.set_level(logging.DEBUG)
+    caplog.set_level(logging.INFO)
     bid_utils.update_adhoc_headers(
         wb_path,
         {"adhoc info1": "X1", "ADHOCINFO2": "X2", "ADHOCINFO11": "Z"},
@@ -366,6 +366,6 @@ def test_update_adhoc_headers(monkeypatch, tmp_path, caplog):
     assert sheet.row7[1] == "X2"
     assert sheet.row7[2] == ""
     assert "Received custom headers" in caplog.text
-    assert "Writing X1 to row 7 column 1" in caplog.text
-    assert "Writing X2 to row 7 column 2" in caplog.text
-    assert "No matching column for custom header ADHOCINFO11" in caplog.text
+    assert "Custom headers written to A6, B6" in caplog.text
+    assert "blank headers for C6" in caplog.text
+    assert "No matching column for custom headers ADHOCINFO11" in caplog.text
