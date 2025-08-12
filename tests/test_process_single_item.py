@@ -86,7 +86,7 @@ def test_run_flow_success(payload, caplog):
         "fm_tool_core.process_fm_tool.write_home_fields",
     ) as write_mock, patch(
         "fm_tool_core.process_fm_tool._fetch_adhoc_headers",
-        return_value={"ADHOC_INFO1": "A"},
+        return_value={"ADHOC_INFO1": "Origin (Live/Drop)"},
     ) as adhoc_mock, patch(
         "fm_tool_core.process_fm_tool.update_adhoc_headers",
     ) as upd_mock:
@@ -102,10 +102,14 @@ def test_run_flow_success(payload, caplog):
         payload["BID-Payload"],
         "ACME",
         ["i1", "i2"],
-        {"ADHOC_INFO1": "A"},
+        {"ADHOC_INFO1": "Origin (Live/Drop)"},
     )
     adhoc_mock.assert_called_once_with(payload["BID-Payload"], ANY)
-    upd_mock.assert_called_once_with(ANY, {"ADHOC_INFO1": "A"}, ANY)
+    upd_mock.assert_called_once_with(
+        ANY,
+        {"ADHOC_INFO1": "Origin (Live/Drop)"},
+        ANY,
+    )
     assert "Applying ad-hoc headers" in caplog.text
     assert result["Out_boolWorkcompleted"] is True
     assert result["Out_strWorkExceptionMessage"] == ""
