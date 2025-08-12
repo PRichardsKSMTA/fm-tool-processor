@@ -248,7 +248,7 @@ def write_home_fields(
                 ws.range(cell).value = cid
         headers = adhoc_headers or {}
         for i in range(1, 11):
-            ws.range(f"AR{35 + i}").value = headers.get(f"ADHOC_INFO{i}")
+            ws.range(f"AR{35 + i}").value = headers.get(f"ADHOC_INFO{i}", "")
         wb.save()
     finally:
         if wb is not None:

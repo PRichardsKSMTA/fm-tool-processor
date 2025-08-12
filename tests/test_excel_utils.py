@@ -93,7 +93,45 @@ def test_write_home_fields(monkeypatch, tmp_path):
         "AR43",
         "AR44",
     ]:
-        assert cells[addr].value is None
+        assert cells[addr].value == ""
+    wb.save.assert_called_once_with()
+    wb.close.assert_called_once_with()
+    app.kill.assert_called_once_with()
+    pc.CoInitialize.assert_called_once_with()
+    pc.CoUninitialize.assert_called_once_with()
+
+
+def test_write_home_fields_no_headers_blank(monkeypatch, tmp_path):
+    pc = SimpleNamespace(CoInitialize=MagicMock(), CoUninitialize=MagicMock())
+    monkeypatch.setattr(excel_utils, "pythoncom", pc)
+
+    cells = {
+        "BID": SimpleNamespace(value=None),
+        "D8:H8": SimpleNamespace(value=None),
+    }
+    for i in range(10):
+        cells[f"AR{36 + i}"] = SimpleNamespace(value=None)
+
+    def range_side_effect(addr):
+        return cells[addr]
+
+    sheet = SimpleNamespace(range=MagicMock(side_effect=range_side_effect))
+    wb = SimpleNamespace(sheets={"HOME": sheet}, save=MagicMock(), close=MagicMock())
+    app = SimpleNamespace(
+        api=SimpleNamespace(),
+        books=SimpleNamespace(open=MagicMock(return_value=wb)),
+        kill=MagicMock(),
+    )
+
+    monkeypatch.setattr(
+        excel_utils,
+        "xw",
+        SimpleNamespace(App=MagicMock(return_value=app)),
+    )
+
+    excel_utils.write_home_fields(tmp_path / "wb.xlsx", None, None, None, None)
+    for addr in [f"AR{36 + i}" for i in range(10)]:
+        assert cells[addr].value == ""
     wb.save.assert_called_once_with()
     wb.close.assert_called_once_with()
     app.kill.assert_called_once_with()
