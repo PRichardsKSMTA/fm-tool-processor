@@ -327,15 +327,16 @@ def process_row(
     log.info("Template copied to %s", dst_path)
 
     cust_ids: List[str] | None = None
+    adhoc: Dict[str, str] | None = None
     if bid_guid is not None:
         cust_ids = _fetch_customer_ids(bid_guid, log)
-    write_home_fields(dst_path, bid_guid, row.get("CUSTOMER_NAME"), cust_ids)
-    if bid_guid is not None:
         adhoc = _fetch_adhoc_headers(bid_guid, log)
         if adhoc:
             log.info("Applying ad-hoc headers: %s", adhoc)
         else:
             log.info("No ad-hoc headers found")
+    write_home_fields(dst_path, bid_guid, row.get("CUSTOMER_NAME"), cust_ids, adhoc)
+    if bid_guid is not None:
         update_adhoc_headers(dst_path, adhoc, log)
 
     log.info("Waiting for CPU to drop")

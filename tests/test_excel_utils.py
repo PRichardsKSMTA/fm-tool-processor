@@ -44,6 +44,16 @@ def test_write_home_fields(monkeypatch, tmp_path):
         "F10": SimpleNamespace(value=None),
         "G10": SimpleNamespace(value=None),
         "H10": SimpleNamespace(value=None),
+        "AR36": SimpleNamespace(value=None),
+        "AR37": SimpleNamespace(value=None),
+        "AR38": SimpleNamespace(value=None),
+        "AR39": SimpleNamespace(value=None),
+        "AR40": SimpleNamespace(value=None),
+        "AR41": SimpleNamespace(value=None),
+        "AR42": SimpleNamespace(value=None),
+        "AR43": SimpleNamespace(value=None),
+        "AR44": SimpleNamespace(value=None),
+        "AR45": SimpleNamespace(value=None),
     }
 
     def range_side_effect(addr):
@@ -61,7 +71,8 @@ def test_write_home_fields(monkeypatch, tmp_path):
     monkeypatch.setattr(excel_utils, "xw", xw_mock)
 
     ids = ["c1", "c2", "c3", "c4", "c5"]
-    excel_utils.write_home_fields(tmp_path / "wb.xlsx", "pg", "cust", ids)
+    headers = {"ADHOC_INFO1": "A1", "ADHOC_INFO5": "A5", "ADHOC_INFO10": "A10"}
+    excel_utils.write_home_fields(tmp_path / "wb.xlsx", "pg", "cust", ids, headers)
     assert cells["BID"].value == "pg"
     assert cells["D8:H8"].value == "cust"
     assert cells["D8:H8"].api.Validation is validation_obj
@@ -70,6 +81,19 @@ def test_write_home_fields(monkeypatch, tmp_path):
     assert cells["F10"].value == "c3"
     assert cells["G10"].value == "c4"
     assert cells["H10"].value == "c5"
+    assert cells["AR36"].value == "A1"
+    assert cells["AR40"].value == "A5"
+    assert cells["AR45"].value == "A10"
+    for addr in [
+        "AR37",
+        "AR38",
+        "AR39",
+        "AR41",
+        "AR42",
+        "AR43",
+        "AR44",
+    ]:
+        assert cells[addr].value is None
     wb.save.assert_called_once_with()
     wb.close.assert_called_once_with()
     app.kill.assert_called_once_with()

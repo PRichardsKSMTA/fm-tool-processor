@@ -98,7 +98,11 @@ def test_run_flow_success(payload, caplog):
     fetch_mock.assert_not_called()
     cid_mock.assert_called_once_with(payload["BID-Payload"], ANY)
     write_mock.assert_called_once_with(
-        ANY, payload["BID-Payload"], "ACME", ["i1", "i2"]
+        ANY,
+        payload["BID-Payload"],
+        "ACME",
+        ["i1", "i2"],
+        {"ADHOC_INFO1": "A"},
     )
     adhoc_mock.assert_called_once_with(payload["BID-Payload"], ANY)
     upd_mock.assert_called_once_with(ANY, {"ADHOC_INFO1": "A"}, ANY)
@@ -134,7 +138,7 @@ def test_run_flow_without_bid_payload(payload):
         result = core.run_flow(payload)
     macro.assert_called_once()
     assert len(macro.call_args[0][1]) == 3
-    write_mock.assert_called_once_with(ANY, None, "ACME", None)
+    write_mock.assert_called_once_with(ANY, None, "ACME", None, None)
     cid_mock.assert_not_called()
     adhoc_mock.assert_not_called()
     upd_mock.assert_not_called()
