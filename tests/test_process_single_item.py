@@ -5,6 +5,7 @@ Mocks heavy external dependencies (Excel & SharePoint) so we can assert that:
   * Validation logic branches correctly
 """
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import ANY, patch
 
@@ -63,9 +64,9 @@ def payload(tmp_path):
     }
 
 
-def test_run_flow_success(payload):
+def test_run_flow_success(payload, caplog):
     """All validations pass -> Out_boolWorkcompleted=True"""
-    with patch(
+    with caplog.at_level(logging.INFO, logger="fm_tool"), patch(
         "fm_tool_core.process_fm_tool.run_excel_macro",
         return_value=_FakeWorkbook(),
     ) as macro, patch(
@@ -101,6 +102,7 @@ def test_run_flow_success(payload):
     )
     adhoc_mock.assert_called_once_with(payload["BID-Payload"], ANY)
     upd_mock.assert_called_once_with(ANY, {"ADHOC_INFO1": "A"}, ANY)
+    assert "Applying ad-hoc headers" in caplog.text
     assert result["Out_boolWorkcompleted"] is True
     assert result["Out_strWorkExceptionMessage"] == ""
 

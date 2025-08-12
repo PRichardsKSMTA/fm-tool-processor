@@ -262,7 +262,7 @@ def _fetch_adhoc_headers(process_guid: str, log: logging.Logger) -> Dict[str, st
                 )
                 if isinstance(v, str)
             }
-            log.debug("Fetched custom headers: %s", headers)
+            log.info("Fetched custom headers: %s", headers)
             return headers
     except Exception as exc:
         log.warning("Failed to fetch ad-hoc headers: %s", exc)
@@ -332,6 +332,10 @@ def process_row(
     write_home_fields(dst_path, bid_guid, row.get("CUSTOMER_NAME"), cust_ids)
     if bid_guid is not None:
         adhoc = _fetch_adhoc_headers(bid_guid, log)
+        if adhoc:
+            log.info("Applying ad-hoc headers: %s", adhoc)
+        else:
+            log.info("No ad-hoc headers found")
         update_adhoc_headers(dst_path, adhoc, log)
 
     log.info("Waiting for CPU to drop")
