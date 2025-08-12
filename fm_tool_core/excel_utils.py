@@ -227,6 +227,7 @@ def write_home_fields(
     process_guid: str | None,
     customer_name: str | None,
     customer_ids: Sequence[str] | None = None,
+    adhoc_headers: dict[str, str] | None = None,
 ) -> None:
     """Write basic HOME sheet fields to *wb_path*."""
     if xw is None:
@@ -245,6 +246,9 @@ def write_home_fields(
             cells = ["D10", "E10", "F10", "G10", "H10"]
             for cell, cid in zip(cells, customer_ids):
                 ws.range(cell).value = cid
+        headers = adhoc_headers or {}
+        for i in range(1, 11):
+            ws.range(f"AR{35 + i}").value = headers.get(f"ADHOC_INFO{i}")
         wb.save()
     finally:
         if wb is not None:
