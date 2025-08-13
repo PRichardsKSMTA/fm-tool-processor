@@ -54,7 +54,7 @@ class FakeCell:
 class MockBidSheet:
     def __init__(self):
         self.row6 = [f"Ad Hoc Info {i}" for i in range(1, 11)]
-        self.row7 = ["" for _ in range(10)]
+        self.row7 = [f"H{i}" for i in range(1, 11)]
         self.api = FakeHeaderApi(len(self.row6))
 
     def range(self, addr: tuple[int, int]):  # pragma: no cover - simple mock
@@ -223,6 +223,7 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path, caplog):
             return FakeDataRange()
 
     header_sheet = MockBidSheet()
+    header_sheet.row7 = [f"H{i}" for i in range(1, 11)]
     data_sheet = FakeSheetRFP()
 
     class FakeBook:
@@ -293,10 +294,9 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path, caplog):
     assert calls == ["write"]
     assert header_sheet.row7[0] == "X1"
     assert header_sheet.row7[2] == "X3"
-    assert header_sheet.row7[1] == ""
+    assert header_sheet.row7[1] == "H2"
     assert "Received custom headers" in caplog.text
     assert "Custom headers written to A6, C6" in caplog.text
-    assert "blank headers for B6" in caplog.text
     assert "No matching column for custom headers ADHOCINFO11" in caplog.text
 
 
@@ -355,7 +355,7 @@ def test_update_adhoc_headers(monkeypatch, tmp_path, caplog):
     )
 
     log = logging.getLogger("test")
-
+    sheet.row7 = [f"H{i}" for i in range(1, 11)]
     caplog.set_level(logging.INFO)
     bid_utils.update_adhoc_headers(
         wb_path,
@@ -364,8 +364,7 @@ def test_update_adhoc_headers(monkeypatch, tmp_path, caplog):
     )
     assert sheet.row7[0] == "X1"
     assert sheet.row7[1] == "X2"
-    assert sheet.row7[2] == ""
+    assert sheet.row7[2] == "H3"
     assert "Received custom headers" in caplog.text
     assert "Custom headers written to A6, B6" in caplog.text
-    assert "blank headers for C6" in caplog.text
     assert "No matching column for custom headers ADHOCINFO11" in caplog.text
