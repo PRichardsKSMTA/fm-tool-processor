@@ -395,7 +395,7 @@ def process_row(
         return True
     except Exception:
         log.exception("process_row failure")
-        return False
+        raise
     finally:
         dst_path.unlink(missing_ok=True)
         kill_orphan_excels()
@@ -444,13 +444,20 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         for row in rows:
             attempts = 0
+            last_err: Exception | None = None
             while True:
                 attempts += 1
-                if process_row(row, enable_upload, root_folder, run_id, log, bid_guid):
+                try:
+                    process_row(row, enable_upload, root_folder, run_id, log, bid_guid)
                     success = True
                     break
+                except Exception as err:
+                    last_err = err
+                    log.exception("process_row failure")
                 if attempts >= max_retry:
-                    raise RuntimeError("Max retries reached")
+                    raise FlowError(
+                        f"Max retries reached: {last_err}", work_completed=False
+                    ) from last_err
                 time.sleep(RETRY_SLEEP)
 
         log.info("SUCCESS")

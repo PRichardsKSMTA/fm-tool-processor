@@ -187,3 +187,17 @@ def test_upload_strips_path_from_filename(payload):
     rel_arg = exists_mock.call_args[0][1]
     assert rel_arg.endswith("/dummy.xlsm")
     assert result["Out_boolWorkcompleted"] is True
+
+
+def test_run_flow_raises_last_error_message(payload):
+    """Final error message includes the last process_row failure"""
+
+    payload["item/In_intMaxRetry"] = 2
+    with patch(
+        "fm_tool_core.process_fm_tool.process_row",
+        side_effect=[RuntimeError("first"), RuntimeError("second")],
+    ), patch("fm_tool_core.process_fm_tool.time.sleep"):
+        result = core.run_flow(payload)
+    assert result["Out_boolWorkcompleted"] is False
+    msg = result["Out_strWorkExceptionMessage"]
+    assert "second" in msg and "first" not in msg
