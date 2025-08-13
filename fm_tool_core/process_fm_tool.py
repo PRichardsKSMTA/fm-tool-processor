@@ -377,17 +377,18 @@ def process_row(
             raise FlowError("Validation failed", work_completed=False)
 
         if upload:
+            file_name = Path(row["NEW_EXCEL_FILENAME"]).name
             ctx = sp_ctx(row["CLIENT_DEST_SITE"])
             site_path = urlparse(row["CLIENT_DEST_SITE"]).path
             folder = (
                 Path(site_path) / row["CLIENT_DEST_FOLDER_PATH"].lstrip("/")
             ).as_posix()
-            rel_file = f"{folder}/{row['NEW_EXCEL_FILENAME']}"
+            rel_file = f"{folder}/{file_name}"
             log.info("Uploading to %s", rel_file)
             if sharepoint_file_exists(ctx, rel_file):
-                log.info("SharePoint file exists – skipping upload " "(not an error)")
+                log.info("SharePoint file exists – skipping upload (not an error)")
             else:
-                sharepoint_upload(ctx, folder, row["NEW_EXCEL_FILENAME"], dst_path)
+                sharepoint_upload(ctx, folder, file_name, dst_path)
                 log.info("Uploaded %s", rel_file)
 
         log.info("Local file deleted")

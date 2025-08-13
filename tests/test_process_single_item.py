@@ -147,3 +147,43 @@ def test_run_flow_without_bid_payload(payload):
     adhoc_mock.assert_not_called()
     upd_mock.assert_not_called()
     assert result["Out_boolWorkcompleted"] is True
+
+
+def test_upload_strips_path_from_filename(payload):
+    """SharePoint upload uses only the final path component"""
+
+    payload["item/In_boolEnableSharePointUpload"] = True
+    payload["item/In_dtInputData"][0]["NEW_EXCEL_FILENAME"] = "x/y/dummy.xlsm"
+    with patch(
+        "fm_tool_core.process_fm_tool.run_excel_macro",
+        return_value=_FakeWorkbook(),
+    ), patch(
+        "fm_tool_core.process_fm_tool.read_cell",
+        return_value="HUMD_VAN",
+    ), patch(
+        "fm_tool_core.process_fm_tool.sp_ctx",
+        return_value=object(),
+    ), patch(
+        "fm_tool_core.process_fm_tool.sharepoint_file_exists",
+        return_value=False,
+    ) as exists_mock, patch(
+        "fm_tool_core.process_fm_tool.sharepoint_upload"
+    ) as upload_mock, patch(
+        "fm_tool_core.process_fm_tool._fetch_bid_rows",
+    ), patch(
+        "fm_tool_core.process_fm_tool._fetch_customer_ids",
+        return_value=["i1"],
+    ), patch(
+        "fm_tool_core.process_fm_tool.write_home_fields",
+    ), patch(
+        "fm_tool_core.process_fm_tool._fetch_adhoc_headers",
+        return_value={},
+    ), patch(
+        "fm_tool_core.process_fm_tool.update_adhoc_headers",
+    ):
+        result = core.run_flow(payload)
+    upload_mock.assert_called_once()
+    assert upload_mock.call_args[0][2] == "dummy.xlsm"
+    rel_arg = exists_mock.call_args[0][1]
+    assert rel_arg.endswith("/dummy.xlsm")
+    assert result["Out_boolWorkcompleted"] is True
