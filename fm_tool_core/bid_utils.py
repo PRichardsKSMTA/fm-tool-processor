@@ -95,7 +95,6 @@ def update_adhoc_headers(
             orig_map = {_norm(k): k for k in adhoc_headers}
             matched: set[str] = set()
             written: list[str] = []
-            blanks: list[str] = []
             for i, cell_val in enumerate(row):
                 addr = ws.range((6, i + 1)).get_address(False, False)
                 key = _norm(cell_val)
@@ -103,17 +102,10 @@ def update_adhoc_headers(
                     ws.range((7, i + 1)).value = norm_map[key]
                     matched.add(key)
                     written.append(addr)
-                else:
-                    ws.range((7, i + 1)).value = ""
-                    blanks.append(addr)
 
             unmatched = [orig for key, orig in orig_map.items() if key not in matched]
-            if written or blanks:
-                log.info(
-                    "Custom headers written to %s; blank headers for %s",
-                    ", ".join(written) or "none",
-                    ", ".join(blanks) or "none",
-                )
+            if written:
+                log.info("Custom headers written to %s", ", ".join(written))
             if unmatched:
                 log.info(
                     "No matching column for custom headers %s",
