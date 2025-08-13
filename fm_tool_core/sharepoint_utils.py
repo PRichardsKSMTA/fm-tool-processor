@@ -2,6 +2,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
+try:  # pragma: no cover - optional dependency
+    import requests
+except Exception:  # pragma: no cover - requests may be absent
+    requests = None  # type: ignore
+
+try:  # pragma: no cover - optional dependency
+    from office365.runtime.client_request_exception import ClientRequestException
+except Exception:  # pragma: no cover - library may be absent
+
+    class ClientRequestException(Exception):  # type: ignore
+        pass
+
+
 from .constants import ROOT_SP_SITE, SP_PASS, SP_USERNAME
 from .exceptions import FlowError
 
@@ -32,7 +45,18 @@ def sp_upload(ctx, folder: str, fname: str, local: Path):
     tgt = ctx.web.get_folder_by_server_relative_url(folder)
     with local.open("rb") as f:
         content = f.read()
-    tgt.upload_file(fname, content).execute_query()
+    try:
+        tgt.upload_file(fname, content).execute_query()
+    except ClientRequestException as exc:
+        raise FlowError(
+            f"SharePoint upload failed: {exc}", work_completed=False
+        ) from exc
+    except Exception as exc:  # pragma: no cover - optional
+        if requests is not None and isinstance(exc, requests.HTTPError):
+            raise FlowError(
+                f"SharePoint upload failed: {exc}", work_completed=False
+            ) from exc
+        raise
 
 
 # Backwards compatible aliases used by tests
