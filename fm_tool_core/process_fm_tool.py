@@ -391,13 +391,12 @@ def process_row(
                 sharepoint_upload(ctx, folder, file_name, dst_path)
                 log.info("Uploaded %s", rel_file)
 
-        log.info("Local file deleted")
+        log.info("Local file retained at %s", dst_path)
         return True
     except Exception:
         log.exception("process_row failure")
         raise
     finally:
-        dst_path.unlink(missing_ok=True)
         kill_orphan_excels()
 
 
