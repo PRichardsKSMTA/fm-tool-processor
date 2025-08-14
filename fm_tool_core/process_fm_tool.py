@@ -397,6 +397,8 @@ def process_row(
         log.exception("process_row failure")
         raise
     finally:
+        # Comment back in to delete excel files at end of process
+        # dst_path.unlink(missing_ok=True)
         kill_orphan_excels()
 
 
