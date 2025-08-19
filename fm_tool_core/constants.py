@@ -21,6 +21,12 @@ ROOT_SP_SITE = "https://ksmcpa.sharepoint.com/teams/ksmta"
 SCAC_VALIDATION_SHEET = "HOME"
 VISIBLE_EXCEL = os.getenv("FM_SHOW_EXCEL", "0") == "1"
 
+SMTP_SERVER = os.getenv("SMTP_SERVER")
+SMTP_PORT = os.getenv("SMTP_PORT")
+SMTP_USERNAME = os.getenv("SMTP_USERNAME")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+SMTP_FROM = os.getenv("SMTP_FROM")
+
 __all__ = [
     "READY_NAME",
     "READY_OK",
@@ -35,4 +41,9 @@ __all__ = [
     "ROOT_SP_SITE",
     "SCAC_VALIDATION_SHEET",
     "VISIBLE_EXCEL",
+    "SMTP_SERVER",
+    "SMTP_PORT",
+    "SMTP_USERNAME",
+    "SMTP_PASSWORD",
+    "SMTP_FROM",
 ]
