@@ -149,6 +149,40 @@ def test_run_flow_without_bid_payload(payload):
     assert result["Out_boolWorkcompleted"] is True
 
 
+def test_run_flow_nit_ignores_bid_payload(payload):
+    """BID-Payload is ignored for NIT runs"""
+
+    payload["item/In_dtInputData"][0]["FM_TOOL"] = "NIT"
+    with patch(
+        "fm_tool_core.process_fm_tool.run_excel_macro",
+        return_value=_FakeWorkbook(),
+    ) as macro, patch(
+        "fm_tool_core.process_fm_tool.read_cell",
+        return_value="HUMD_VAN",
+    ), patch(
+        "fm_tool_core.process_fm_tool.sharepoint_upload"
+    ), patch(
+        "fm_tool_core.process_fm_tool.sharepoint_file_exists",
+        return_value=False,
+    ), patch(
+        "fm_tool_core.process_fm_tool._fetch_customer_ids"
+    ) as cid_mock, patch(
+        "fm_tool_core.process_fm_tool.write_home_fields"
+    ) as write_mock, patch(
+        "fm_tool_core.process_fm_tool._fetch_adhoc_headers"
+    ) as adhoc_mock, patch(
+        "fm_tool_core.process_fm_tool.update_adhoc_headers"
+    ) as upd_mock:
+        result = core.run_flow(payload)
+    macro.assert_called_once()
+    assert len(macro.call_args[0][1]) == 3
+    write_mock.assert_called_once_with(ANY, None, "ACME", None, None)
+    cid_mock.assert_not_called()
+    adhoc_mock.assert_not_called()
+    upd_mock.assert_not_called()
+    assert result["Out_boolWorkcompleted"] is True
+
+
 def test_upload_strips_path_from_filename(payload):
     """SharePoint upload uses only the final path component"""
 

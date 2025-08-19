@@ -437,6 +437,8 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
     scac = op_code.split("_", 1)[0].upper()
     payload_type = _detect_payload_type(rows)  # 'PIT' or 'NIT'
     log.info("Detected payload type: %s", payload_type)
+    if payload_type == "NIT":
+        bid_guid = None
 
     # BEGIN status (single proc)
     _update_status(scac, f"{payload_type}-BEGIN", log)
