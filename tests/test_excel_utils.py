@@ -101,6 +101,56 @@ def test_write_home_fields(monkeypatch, tmp_path):
     pc.CoUninitialize.assert_called_once_with()
 
 
+def test_write_home_fields_missing_bid(monkeypatch, tmp_path):
+    pc = SimpleNamespace(CoInitialize=MagicMock(), CoUninitialize=MagicMock())
+    monkeypatch.setattr(excel_utils, "pythoncom", pc)
+
+    cust_range = SimpleNamespace(value=None)
+    cust_range.api = SimpleNamespace(Validation=object())
+
+    cells = {
+        "D8:H8": cust_range,
+        "D10": SimpleNamespace(value=None),
+        "E10": SimpleNamespace(value=None),
+        "F10": SimpleNamespace(value=None),
+        "G10": SimpleNamespace(value=None),
+        "H10": SimpleNamespace(value=None),
+    }
+    for i in range(10):
+        cells[f"AR{36 + i}"] = SimpleNamespace(value=None)
+
+    def range_side_effect(addr):
+        if addr not in cells:
+            raise KeyError(addr)
+        return cells[addr]
+
+    sheet = SimpleNamespace(range=MagicMock(side_effect=range_side_effect))
+    wb = SimpleNamespace(sheets={"HOME": sheet}, save=MagicMock(), close=MagicMock())
+    app = SimpleNamespace(
+        api=SimpleNamespace(),
+        books=SimpleNamespace(open=MagicMock(return_value=wb)),
+        kill=MagicMock(),
+    )
+
+    monkeypatch.setattr(
+        excel_utils,
+        "xw",
+        SimpleNamespace(App=MagicMock(return_value=app)),
+    )
+
+    ids = ["c1", "c2", "c3", "c4", "c5"]
+    excel_utils.write_home_fields(tmp_path / "wb.xlsx", "pg", "cust", ids, None)
+    assert "BID" not in cells
+    assert cells["D8:H8"].value == "cust"
+    assert cells["D10"].value == "c1"
+    assert cells["H10"].value == "c5"
+    wb.save.assert_called_once_with()
+    wb.close.assert_called_once_with()
+    app.kill.assert_called_once_with()
+    pc.CoInitialize.assert_called_once_with()
+    pc.CoUninitialize.assert_called_once_with()
+
+
 def test_write_home_fields_no_headers_blank(monkeypatch, tmp_path):
     pc = SimpleNamespace(CoInitialize=MagicMock(), CoUninitialize=MagicMock())
     monkeypatch.setattr(excel_utils, "pythoncom", pc)

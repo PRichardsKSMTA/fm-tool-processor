@@ -239,7 +239,11 @@ def write_home_fields(
     try:
         wb = app.books.open(str(wb_path))
         ws = wb.sheets["HOME"]
-        ws.range("BID").value = process_guid
+        if process_guid is not None:
+            try:
+                ws.range("BID").value = process_guid
+            except Exception:
+                logging.debug("BID range missing", exc_info=True)
         # Populate the entire merged customer name range to preserve validation
         ws.range("D8:H8").value = customer_name
         if customer_ids:
