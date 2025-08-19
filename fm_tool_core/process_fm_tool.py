@@ -65,6 +65,7 @@ from .excel_utils import (
 )
 from .exceptions import FlowError
 from .sharepoint_utils import sp_ctx, sharepoint_file_exists, sharepoint_upload
+from .notification_utils import send_failure_email, send_success_email
 
 # ───────────────────────────── SQL HELPERS ─────────────────────────────────
 _SQL_CONN_STR: str | None = None
@@ -413,6 +414,7 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
     enable_upload = payload.get("item/In_boolEnableSharePointUpload", True)
     max_retry = int(payload.get("item/In_intMaxRetry", 1))
     bid_guid = payload.get("BID-Payload")
+    notify_email = os.getenv("NOTIFY_EMAIL")
 
     run_id = uuid.uuid4().hex[:8]
     LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -464,6 +466,13 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
                 time.sleep(RETRY_SLEEP)
 
         log.info("SUCCESS")
+        if notify_email:
+            row0 = rows[0]
+            fname = Path(row0["NEW_EXCEL_FILENAME"]).name
+            site = row0.get("CLIENT_DEST_SITE", "").rstrip("/")
+            folder = row0.get("CLIENT_DEST_FOLDER_PATH", "").strip("/")
+            sp_url = f"{site}/{folder}/{fname}"
+            send_success_email(notify_email, fname, sp_url, str(log_file))
         return {
             "Out_strWorkExceptionMessage": "",
             "Out_boolWorkcompleted": True,
@@ -472,6 +481,8 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     except Exception as exc:
         log.exception("Run failed")
+        if notify_email:
+            send_failure_email(notify_email, str(exc))
         return {
             "Out_strWorkExceptionMessage": str(exc),
             "Out_boolWorkcompleted": success,
