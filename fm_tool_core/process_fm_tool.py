@@ -65,6 +65,7 @@ from .excel_utils import (
 )
 from .exceptions import FlowError
 from .sharepoint_utils import sp_ctx, sharepoint_file_exists, sharepoint_upload
+from .notification_utils import send_failure_email, send_success_email
 
 # ───────────────────────────── SQL HELPERS ─────────────────────────────────
 _SQL_CONN_STR: str | None = None
@@ -316,8 +317,11 @@ def process_row(
     run_id: str,
     log: logging.Logger,
     bid_guid: str | None = None,
-) -> bool:
-    """Process one FM payload row. Returns True on success."""
+) -> Dict[str, str]:
+    """Process one FM payload row.
+
+    Returns dict with keys: file_path, file_name and sharepoint_url.
+    """
     op_code = row["SCAC_OPP"]
     template_src = row["TOOL_TEMPLATE_FILEPATH"]
 
@@ -326,6 +330,13 @@ def process_row(
         template_src, root, f"{Path(row['NEW_EXCEL_FILENAME']).stem}_{run_id}.xlsm", log
     )
     log.info("Template copied to %s", dst_path)
+
+    file_name = Path(row["NEW_EXCEL_FILENAME"]).name
+    sharepoint_url = (
+        f"{row['CLIENT_DEST_SITE'].rstrip('/')}/"
+        f"{row['CLIENT_DEST_FOLDER_PATH'].strip('/')}/"
+        f"{file_name}"
+    )
 
     cust_ids: List[str] | None = None
     adhoc: Dict[str, str] | None = None
@@ -377,7 +388,6 @@ def process_row(
             raise FlowError("Validation failed", work_completed=False)
 
         if upload:
-            file_name = Path(row["NEW_EXCEL_FILENAME"]).name
             ctx = sp_ctx(row["CLIENT_DEST_SITE"])
             site_path = urlparse(row["CLIENT_DEST_SITE"]).path
             folder = (
@@ -392,7 +402,11 @@ def process_row(
                 log.info("Uploaded %s", rel_file)
 
         log.info("Local file retained at %s", dst_path)
-        return True
+        return {
+            "file_path": str(dst_path),
+            "file_name": file_name,
+            "sharepoint_url": sharepoint_url,
+        }
     except Exception:
         log.exception("process_row failure")
         raise
@@ -413,6 +427,7 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
     enable_upload = payload.get("item/In_boolEnableSharePointUpload", True)
     max_retry = int(payload.get("item/In_intMaxRetry", 1))
     bid_guid = payload.get("BID-Payload")
+    notify_email = payload.get("NOTIFY_EMAIL")
 
     run_id = uuid.uuid4().hex[:8]
     LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -443,6 +458,7 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
     # BEGIN status (single proc)
     _update_status(scac, f"{payload_type}-BEGIN", log)
 
+    file_infos: List[Dict[str, str]] = []
     success = False
     try:
         for row in rows:
@@ -451,7 +467,10 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
             while True:
                 attempts += 1
                 try:
-                    process_row(row, enable_upload, root_folder, run_id, log, bid_guid)
+                    info = process_row(
+                        row, enable_upload, root_folder, run_id, log, bid_guid
+                    )
+                    file_infos.append(info)
                     success = True
                     break
                 except Exception as err:
@@ -464,6 +483,17 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
                 time.sleep(RETRY_SLEEP)
 
         log.info("SUCCESS")
+        if notify_email:
+            for info in file_infos:
+                try:
+                    send_success_email(
+                        notify_email,
+                        info["file_name"],
+                        info["sharepoint_url"],
+                        info["file_path"],
+                    )
+                except Exception:
+                    log.exception("send_success_email failed")
         return {
             "Out_strWorkExceptionMessage": "",
             "Out_boolWorkcompleted": True,
@@ -472,8 +502,17 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     except Exception as exc:
         log.exception("Run failed")
+        msg = str(exc)
+        prefix = "Max retries reached: "
+        if msg.startswith(prefix):
+            msg = msg.replace(prefix, "", 1)
+        if notify_email:
+            try:
+                send_failure_email(notify_email, msg)
+            except Exception:
+                log.exception("send_failure_email failed")
         return {
-            "Out_strWorkExceptionMessage": str(exc),
+            "Out_strWorkExceptionMessage": msg,
             "Out_boolWorkcompleted": success,
             "Out_strLogPath": str(log_file),
         }
