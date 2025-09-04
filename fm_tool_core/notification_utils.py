@@ -63,7 +63,7 @@ def send_success_email(
         return
 
     msg = EmailMessage()
-    msg["Subject"] = "FM Tool processing succeeded"
+    msg["Subject"] = "Your PIT was generated successfully. Please visit your SharePoint site to view the new file."
     msg["From"] = from_addr
     msg["To"] = to_addr
     msg.set_content(
