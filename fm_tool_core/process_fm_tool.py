@@ -30,7 +30,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 
 # ───────────────────────────── psutil (optional) ───────────────────────────
 try:
@@ -475,7 +475,8 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
             fname = Path(row0["NEW_EXCEL_FILENAME"]).name
             site = row0.get("CLIENT_DEST_SITE", "").rstrip("/")
             folder = row0.get("CLIENT_DEST_FOLDER_PATH", "").strip("/")
-            sp_url = f"{site}/{folder}/{fname}"
+            raw_url = f"{site}/{folder}/{fname}"
+            sp_url = quote(raw_url, safe=":/")
             send_success_email(notify_email, fname, sp_url, str(log_file))
             if bid_guid:
                 send_bid_webhook(
