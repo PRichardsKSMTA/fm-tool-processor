@@ -145,6 +145,46 @@ def test_bid_webhook_called(monkeypatch, payload):
     assert args[4]["BID_GUID"] == "guid123"
 
 
+def test_bid_webhook_spaces_encoded(monkeypatch, payload):
+    """SharePoint URL is URL-encoded when spaces are present."""
+
+    payload["BID-Payload"] = "guid123"
+    item = payload["item/In_dtInputData"][0]
+    item["NOTIFY_EMAIL"] = "notify@example.com"
+    item["CLIENT_DEST_FOLDER_PATH"] = "/NA Path"
+    item["NEW_EXCEL_FILENAME"] = "dummy file.xlsm"
+    with patch(
+        "fm_tool_core.process_fm_tool.run_excel_macro",
+        return_value=_FakeWorkbook(),
+    ), patch(
+        "fm_tool_core.process_fm_tool.read_cell",
+        side_effect=["HUMD_VAN", "ok"],
+    ), patch(
+        "fm_tool_core.process_fm_tool.sp_ctx",
+    ), patch(
+        "fm_tool_core.process_fm_tool.sharepoint_file_exists",
+        return_value=False,
+    ), patch(
+        "fm_tool_core.process_fm_tool.sharepoint_upload",
+    ), patch(
+        "fm_tool_core.process_fm_tool.write_home_fields",
+    ), patch(
+        "fm_tool_core.process_fm_tool.wait_for_cpu",
+    ), patch(
+        "fm_tool_core.process_fm_tool.kill_orphan_excels",
+    ), patch(
+        "fm_tool_core.process_fm_tool.send_success_email",
+    ), patch(
+        "fm_tool_core.process_fm_tool.send_failure_email",
+    ), patch(
+        "fm_tool_core.process_fm_tool.send_bid_webhook",
+    ) as webhook:
+        core.run_flow(payload)
+
+    args = webhook.call_args[0]
+    assert args[2] == ("https://example.sharepoint.com/NA%20Path/dummy%20file.xlsm")
+
+
 @pytest.mark.parametrize("missing", ["BID-Payload", "NOTIFY_EMAIL"])
 def test_bid_webhook_skipped(monkeypatch, payload, missing):
     """Webhook not called when BID or email missing."""
