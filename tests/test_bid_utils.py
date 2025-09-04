@@ -2,6 +2,72 @@ import logging
 import types
 
 
+class FakeHeaderApi:
+    def __init__(self, last_col: int):
+        self.Columns = types.SimpleNamespace(Count=last_col)
+        self._last_col = last_col
+
+    def Cells(self, _row: int, _col: int):  # pragma: no cover - simple mock
+        return types.SimpleNamespace(
+            End=lambda _dir: types.SimpleNamespace(Column=self._last_col)
+        )
+
+
+class FakeRow6Range:
+    def __init__(self, sheet: "MockBidSheet"):
+        self.sheet = sheet
+
+    def resize(self, _r: int, _c: int):
+        return self
+
+    @property
+    def value(self):  # pragma: no cover - simple mock
+        return (tuple(self.sheet.row6),)
+
+    def get_address(self, *_args):  # pragma: no cover - simple mock
+        return "A6"
+
+
+class FakeRow7Cell:
+    def __init__(self, sheet: "MockBidSheet", col: int):
+        self.sheet = sheet
+        self.col = col
+
+    @property
+    def value(self):  # pragma: no cover - simple mock
+        return self.sheet.row7[self.col - 1]
+
+    @value.setter
+    def value(self, val):  # pragma: no cover - simple mock
+        self.sheet.row7[self.col - 1] = val
+
+
+class FakeCell:
+    def __init__(self, addr: tuple[int, int]):
+        self.addr = addr
+
+    def get_address(self, *_args):  # pragma: no cover - simple mock
+        row, col = self.addr
+        return f"{chr(ord('A') + col - 1)}{row}"
+
+
+class MockBidSheet:
+    def __init__(self):
+        self.row6 = [f"Ad Hoc Info {i}" for i in range(1, 11)]
+        self.row7 = ["" for _ in range(10)]
+        self.api = FakeHeaderApi(len(self.row6))
+
+    def range(self, addr: tuple[int, int]):  # pragma: no cover - simple mock
+        row, col = addr
+        if row == 6 and col == 1:
+            return FakeRow6Range(self)
+        if row == 6:
+            return FakeCell(addr)
+        if row == 7:
+            return FakeRow7Cell(self, col)
+        return FakeCell(addr)
+
+
 def test_insert_bid_rows_early_return(monkeypatch, tmp_path, caplog):
     called = False
 
@@ -35,8 +101,9 @@ def test_insert_bid_rows_writes_rows(monkeypatch, tmp_path, caplog):
             self.Rows = types.SimpleNamespace(Count=1)
 
         def Cells(self, _row, _col):
-            end = lambda _dir: types.SimpleNamespace(Row=1)
-            return types.SimpleNamespace(End=end)
+            return types.SimpleNamespace(
+                End=lambda _dir: types.SimpleNamespace(Row=1),
+            )
 
     class FakeRange:
         def __init__(self):
@@ -116,35 +183,21 @@ def test_insert_bid_rows_writes_rows(monkeypatch, tmp_path, caplog):
     assert any("RFP sheet" in r.message for r in caplog.records)
 
 
-def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
+def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path, caplog):
     from fm_tool_core import bid_utils
 
     wb_path = tmp_path / "wb.xlsx"
     wb_path.touch()
     calls: list[str] = []
 
-    class FakeApi:
+    class FakeApiRFP:
         def __init__(self):
             self.Rows = types.SimpleNamespace(Count=1)
 
         def Cells(self, _row, _col):
-            end = lambda _dir: types.SimpleNamespace(Row=1)
-            return types.SimpleNamespace(End=end)
-
-    class FakeHeaderRange:
-        def __init__(self, sheet):
-            self.sheet = sheet
-
-        def resize(self, _r, _c):
-            return self
-
-        @property
-        def value(self):
-            return self.sheet.headers
-
-        @value.setter
-        def value(self, val):
-            self.sheet.headers = val
+            return types.SimpleNamespace(
+                End=lambda _dir: types.SimpleNamespace(Row=1),
+            )
 
     class FakeDataRange:
         def __init__(self):
@@ -162,21 +215,19 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
             calls.append("write")
             self._value = val
 
-    class FakeSheet:
+    class FakeSheetRFP:
         def __init__(self):
-            self.api = FakeApi()
-            self.headers = bid_utils._COLUMNS.copy()
+            self.api = FakeApiRFP()
 
-        def range(self, addr):
-            if addr == (1, 1):
-                return FakeHeaderRange(self)
+        def range(self, _addr):
             return FakeDataRange()
 
-    sheet = FakeSheet()
+    header_sheet = MockBidSheet()
+    data_sheet = FakeSheetRFP()
 
     class FakeBook:
         def __init__(self):
-            self.sheets = {"RFP": sheet}
+            self.sheets = {"RFP": data_sheet, "BID": header_sheet}
 
         def save(self):
             pass
@@ -202,7 +253,12 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
     monkeypatch.setattr(
         bid_utils,
         "xw",
-        types.SimpleNamespace(App=FakeApp),
+        types.SimpleNamespace(
+            App=FakeApp,
+            constants=types.SimpleNamespace(
+                Direction=types.SimpleNamespace(xlToLeft=1)
+            ),
+        ),
         raising=False,
     )
     monkeypatch.setattr(
@@ -223,12 +279,93 @@ def test_insert_bid_rows_custom_headers(monkeypatch, tmp_path):
         }
     ]
     log = logging.getLogger("test")
+    caplog.set_level(logging.INFO)
     bid_utils.insert_bid_rows(
         wb_path,
         rows,
         log,
-        adhoc_headers={"ADHOC_INFO1": "X1", "ADHOC_INFO3": "X3"},
+        adhoc_headers={
+            " AdHoC inFo1 ": "X1",
+            "adhocinfo3": "X3",
+            "ADHOCINFO11": "Z",
+        },
     )
     assert calls == ["write"]
-    assert sheet.headers[13] == "X1"
-    assert sheet.headers[15] == "X3"
+    assert header_sheet.row7[0] == "X1"
+    assert header_sheet.row7[2] == "X3"
+    assert header_sheet.row7[1] == ""
+    assert "Received custom headers" in caplog.text
+    assert "Custom headers written to A6, C6" in caplog.text
+    assert "blank headers for B6" in caplog.text
+    assert "No matching column for custom headers ADHOCINFO11" in caplog.text
+
+
+def test_update_adhoc_headers(monkeypatch, tmp_path, caplog):
+    from fm_tool_core import bid_utils
+
+    wb_path = tmp_path / "wb.xlsx"
+    wb_path.touch()
+
+    sheet = MockBidSheet()
+
+    class FakeBook:
+        def __init__(self):
+            self.sheets = {"BID": sheet}
+
+        def save(self):
+            pass
+
+        def close(self):
+            pass
+
+    def fake_open(_path):
+        return FakeBook()
+
+    class FakeBooks:
+        def open(self, path):
+            return fake_open(path)
+
+    class FakeApp:
+        def __init__(self, *args, **kwargs):
+            self.api = types.SimpleNamespace(DisplayAlerts=False)
+            self.books = FakeBooks()
+
+        def kill(self):
+            pass
+
+    monkeypatch.setattr(
+        bid_utils,
+        "xw",
+        types.SimpleNamespace(
+            App=FakeApp,
+            constants=types.SimpleNamespace(
+                Direction=types.SimpleNamespace(xlToLeft=1)
+            ),
+        ),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        bid_utils,
+        "pythoncom",
+        types.SimpleNamespace(
+            CoInitialize=lambda: None,
+            CoUninitialize=lambda: None,
+        ),
+        raising=False,
+    )
+
+    log = logging.getLogger("test")
+
+    caplog.set_level(logging.INFO)
+    bid_utils.update_adhoc_headers(
+        wb_path,
+        {"adhoc info1": "X1", "ADHOCINFO2": "X2", "ADHOCINFO11": "Z"},
+        log,
+    )
+    assert sheet.row7[0] == "X1"
+    assert sheet.row7[1] == "X2"
+    assert sheet.row7[2] == ""
+    assert "Received custom headers" in caplog.text
+    assert "Custom headers written to A6, B6" in caplog.text
+    assert "blank headers for C6" in caplog.text
+    assert "No matching column for custom headers ADHOCINFO11" in caplog.text

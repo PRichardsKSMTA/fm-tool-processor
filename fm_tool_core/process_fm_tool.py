@@ -49,13 +49,20 @@ except ImportError as _e:  # pragma: no cover
     logging.warning("pyodbc missing – SQL disabled (%s)", _e)
 
 try:
-    from .bid_utils import insert_bid_rows, _COLUMNS
+    from .bid_utils import _COLUMNS, update_adhoc_headers
 except Exception as _e:  # pragma: no cover
-    insert_bid_rows = None  # type: ignore
+    _COLUMNS = []  # type: ignore
+    update_adhoc_headers = lambda *a, **k: None  # type: ignore
     logging.basicConfig(level=logging.WARNING)
     logging.warning("BID utils unavailable: %s", _e)
 from .constants import LOG_DIR, RETRY_SLEEP
-from .excel_utils import copy_template, kill_orphan_excels, read_cell, run_excel_macro
+from .excel_utils import (
+    copy_template,
+    kill_orphan_excels,
+    read_cell,
+    run_excel_macro,
+    write_home_fields,
+)
 from .exceptions import FlowError
 from .sharepoint_utils import sp_ctx, sharepoint_file_exists, sharepoint_upload
 
@@ -248,16 +255,51 @@ def _fetch_adhoc_headers(process_guid: str, log: logging.Logger) -> Dict[str, st
             except Exception as exc:
                 log.warning("Malformed PROCESS_JSON: %s", exc)
                 return {}
-            return {
+            raw = data.get("adhoc_headers")
+            if not isinstance(raw, dict) or not raw:
+                raw = data
+            headers = {
                 k: v
-                for k, v in (
-                    (f"ADHOC_INFO{i}", data.get(f"ADHOC_INFO{i}")) for i in range(1, 11)
-                )
-                if isinstance(v, str)
+                for k, v in raw.items()
+                if k.startswith("ADHOC_INFO") and isinstance(v, str)
             }
+            log.info("Fetched custom headers: %s", headers)
+            return headers
     except Exception as exc:
         log.warning("Failed to fetch ad-hoc headers: %s", exc)
         return {}
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def _fetch_customer_ids(process_guid: str, log: logging.Logger) -> List[str]:
+    """Return up to five CUSTOMER_IDs for *process_guid*."""
+    if pyodbc is None:
+        log.info("(SQL disabled) would fetch CUSTOMER_ID for %s", process_guid)
+        return []
+
+    conn = None
+    try:
+        conn = pyodbc.connect(_sql_conn_str(), timeout=10)
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT TOP 1 CUSTOMER_ID FROM dbo.RFP_OBJECT_DATA "
+                "WHERE PROCESS_GUID = ?",
+                (process_guid,),
+            )
+            row = cur.fetchone()
+            if not row or not row[0]:
+                return []
+            raw = str(row[0])
+            parts = [p.strip() for p in raw.replace(";", ",").split(",")]
+            return [p for p in parts if p][:5]
+    except Exception as exc:
+        log.warning("Failed to fetch CUSTOMER_ID: %s", exc)
+        return []
     finally:
         if conn:
             try:
@@ -284,6 +326,19 @@ def process_row(
         template_src, root, f"{Path(row['NEW_EXCEL_FILENAME']).stem}_{run_id}.xlsm", log
     )
     log.info("Template copied to %s", dst_path)
+
+    cust_ids: List[str] | None = None
+    adhoc: Dict[str, str] | None = None
+    if bid_guid is not None:
+        cust_ids = _fetch_customer_ids(bid_guid, log)
+        adhoc = _fetch_adhoc_headers(bid_guid, log)
+        if adhoc:
+            log.info("Applying ad-hoc headers: %s", adhoc)
+        else:
+            log.info("No ad-hoc headers found")
+    write_home_fields(dst_path, bid_guid, row.get("CUSTOMER_NAME"), cust_ids, adhoc)
+    if bid_guid is not None:
+        update_adhoc_headers(dst_path, adhoc, log)
 
     log.info("Waiting for CPU to drop")
     wait_for_cpu(log=log)
@@ -321,45 +376,29 @@ def process_row(
         if op_val != op_code or oa_val == row["ORDERAREAS_VALIDATION_VALUE"]:
             raise FlowError("Validation failed", work_completed=False)
 
-        if bid_guid and insert_bid_rows:
-            start = time.perf_counter()
-            rows = _fetch_bid_rows(bid_guid, log)
-            fetch_time = time.perf_counter() - start
-            log.info("Fetched %d BID rows in %.3fs", len(rows), fetch_time)
-            headers = _fetch_adhoc_headers(bid_guid, log)
-            if rows:
-                start = time.perf_counter()
-                insert_bid_rows(dst_path, rows, log, headers)
-                ins_time = time.perf_counter() - start
-                log.info(
-                    "Batch inserted %d BID rows in %.3fs",
-                    len(rows),
-                    ins_time,
-                )
-            else:
-                log.info("No BID rows fetched – skipping insert")
-
         if upload:
+            file_name = Path(row["NEW_EXCEL_FILENAME"]).name
             ctx = sp_ctx(row["CLIENT_DEST_SITE"])
             site_path = urlparse(row["CLIENT_DEST_SITE"]).path
             folder = (
                 Path(site_path) / row["CLIENT_DEST_FOLDER_PATH"].lstrip("/")
             ).as_posix()
-            rel_file = f"{folder}/{row['NEW_EXCEL_FILENAME']}"
+            rel_file = f"{folder}/{file_name}"
             log.info("Uploading to %s", rel_file)
             if sharepoint_file_exists(ctx, rel_file):
-                log.info("SharePoint file exists – skipping upload " "(not an error)")
+                log.info("SharePoint file exists – skipping upload (not an error)")
             else:
-                sharepoint_upload(ctx, folder, row["NEW_EXCEL_FILENAME"], dst_path)
+                sharepoint_upload(ctx, folder, file_name, dst_path)
                 log.info("Uploaded %s", rel_file)
 
-        log.info("Local file deleted")
+        log.info("Local file retained at %s", dst_path)
         return True
     except Exception:
         log.exception("process_row failure")
-        return False
+        raise
     finally:
-        dst_path.unlink(missing_ok=True)
+        # Comment back in to delete excel files at end of process
+        # dst_path.unlink(missing_ok=True)
         kill_orphan_excels()
 
 
@@ -398,6 +437,8 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
     scac = op_code.split("_", 1)[0].upper()
     payload_type = _detect_payload_type(rows)  # 'PIT' or 'NIT'
     log.info("Detected payload type: %s", payload_type)
+    if payload_type == "NIT":
+        bid_guid = None
 
     # BEGIN status (single proc)
     _update_status(scac, f"{payload_type}-BEGIN", log)
@@ -406,13 +447,20 @@ def run_flow(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         for row in rows:
             attempts = 0
+            last_err: Exception | None = None
             while True:
                 attempts += 1
-                if process_row(row, enable_upload, root_folder, run_id, log, bid_guid):
+                try:
+                    process_row(row, enable_upload, root_folder, run_id, log, bid_guid)
                     success = True
                     break
+                except Exception as err:
+                    last_err = err
+                    log.exception("process_row failure")
                 if attempts >= max_retry:
-                    raise RuntimeError("Max retries reached")
+                    raise FlowError(
+                        f"Max retries reached: {last_err}", work_completed=False
+                    ) from last_err
                 time.sleep(RETRY_SLEEP)
 
         log.info("SUCCESS")

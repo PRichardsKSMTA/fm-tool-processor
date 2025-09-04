@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from itertools import chain
 from pathlib import Path
 from typing import Any, Iterable
@@ -47,6 +48,84 @@ _REQUIRED = {
 }
 
 _TARGET_SHEET = "RFP"  # ← changed from “BID”
+_HEADER_SHEET = "BID"
+
+
+def update_adhoc_headers(
+    wb_path: Path, adhoc_headers: dict[str, str], log: logging.Logger
+) -> None:
+    """Write custom ADHOC_INFO labels to row 7 of the BID sheet."""
+    log.info("Received custom headers: %s", adhoc_headers)
+    if not adhoc_headers:
+        return
+    if xw is None:
+        log.error("xlwings is required for header updates")
+        return
+    pythoncom.CoInitialize()
+    app = xw.App(visible=VISIBLE_EXCEL, add_book=False)  # type: ignore
+    app.api.DisplayAlerts = False
+    wb = None
+    try:
+        wb = app.books.open(str(wb_path))
+        try:
+            ws = wb.sheets[_HEADER_SHEET]
+        except Exception:
+            log.error("%s sheet not found in %s", _HEADER_SHEET, wb_path)
+            return
+        last = (
+            ws.api.Cells(6, ws.api.Columns.Count)
+            .End(xw.constants.Direction.xlToLeft)
+            .Column
+        )
+        header_rng = ws.range((6, 1)).resize(1, last)
+        values = header_rng.value
+        if isinstance(values, Sequence) and not isinstance(values, str):
+            outer = list(values)
+            nested = (
+                bool(outer)
+                and isinstance(outer[0], Sequence)
+                and not isinstance(outer[0], str)
+            )
+            row = list(outer[0]) if nested else outer
+
+            def _norm(val: object) -> str:
+                return str(val).strip().upper().replace("_", "").replace(" ", "")
+
+            norm_map = {_norm(k): v for k, v in adhoc_headers.items()}
+            orig_map = {_norm(k): k for k in adhoc_headers}
+            matched: set[str] = set()
+            written: list[str] = []
+            for i, cell_val in enumerate(row):
+                addr = ws.range((6, i + 1)).get_address(False, False)
+                key = _norm(cell_val)
+                if key in norm_map:
+                    ws.range((7, i + 1)).value = norm_map[key]
+                    matched.add(key)
+                    written.append(addr)
+
+            unmatched = [orig for key, orig in orig_map.items() if key not in matched]
+            if written:
+                log.info("Custom headers written to %s", ", ".join(written))
+            if unmatched:
+                log.info(
+                    "No matching column for custom headers %s",
+                    ", ".join(unmatched),
+                )
+        wb.save()
+    finally:
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
+        try:
+            app.kill()
+        except Exception:
+            pass
+        try:
+            pythoncom.CoUninitialize()
+        except Exception:
+            pass
 
 
 def insert_bid_rows(
@@ -83,6 +162,9 @@ def insert_bid_rows(
         log.error("xlwings is required for RFP inserts")
         return
 
+    if adhoc_headers:
+        update_adhoc_headers(wb_path, adhoc_headers, log)
+
     pythoncom.CoInitialize()
     app = xw.App(visible=VISIBLE_EXCEL, add_book=False)  # type: ignore
     app.api.DisplayAlerts = False
@@ -95,12 +177,6 @@ def insert_bid_rows(
             log.error("%s sheet not found in %s", _TARGET_SHEET, wb_path)
             return
 
-        if adhoc_headers:
-            header_rng = ws.range((1, 1)).resize(1, len(_COLUMNS))
-            values = header_rng.value
-            if isinstance(values, list):
-                header_rng.value = [adhoc_headers.get(str(v), v) for v in values]
-
         # First empty row in column A
         start_row = ws.api.Cells(ws.api.Rows.Count, 1).End(-4162).Row + 1
         n_rows = len(data)
@@ -109,7 +185,12 @@ def insert_bid_rows(
         # One-shot write
         ws.range((start_row, 1)).resize(n_rows, n_cols).value = data
         wb.save()
-        log.info("Wrote %d rows × %d cols to %s sheet", n_rows, n_cols, _TARGET_SHEET)
+        log.info(
+            "Wrote %d rows × %d cols to %s sheet",
+            n_rows,
+            n_cols,
+            _TARGET_SHEET,
+        )
     finally:
         if wb is not None:
             try:
@@ -126,4 +207,4 @@ def insert_bid_rows(
             pass
 
 
-__all__ = ["insert_bid_rows", "_COLUMNS"]
+__all__ = ["insert_bid_rows", "update_adhoc_headers", "_COLUMNS"]

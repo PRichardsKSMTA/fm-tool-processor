@@ -7,7 +7,7 @@ import shutil
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from .constants import (
     OPEN_TO,
@@ -222,6 +222,54 @@ def run_excel_macro(wb_path: Path, args: tuple, log: logging.Logger):
         raise err
 
 
+def write_home_fields(
+    wb_path: Path,
+    process_guid: str | None,
+    customer_name: str | None,
+    customer_ids: Sequence[str] | None = None,
+    adhoc_headers: dict[str, str] | None = None,
+) -> None:
+    """Write basic HOME sheet fields to *wb_path*."""
+    if xw is None:
+        raise FlowError("xlwings is required", work_completed=False)
+    pythoncom.CoInitialize()
+    app = xw.App(visible=VISIBLE_EXCEL, add_book=False)  # type: ignore
+    app.api.DisplayFullScreen = False
+    wb = None
+    try:
+        wb = app.books.open(str(wb_path))
+        ws = wb.sheets["HOME"]
+        if process_guid is not None:
+            try:
+                ws.range("BID").value = process_guid
+            except Exception:
+                logging.debug("BID range missing", exc_info=True)
+        # Populate the entire merged customer name range to preserve validation
+        ws.range("D8:H8").value = customer_name
+        if customer_ids:
+            cells = ["D10", "E10", "F10", "G10", "H10"]
+            for cell, cid in zip(cells, customer_ids):
+                ws.range(cell).value = cid
+        headers = adhoc_headers or {}
+        for i in range(1, 11):
+            ws.range(f"AR{35 + i}").value = headers.get(f"ADHOC_INFO{i}", "")
+        wb.save()
+    finally:
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
+        try:
+            app.kill()
+        except Exception:
+            pass
+        try:
+            pythoncom.CoUninitialize()
+        except Exception:
+            pass
+
+
 def read_cell(wb_path: Path, col: str, row: str) -> Any:
     if xw is None:
         raise FlowError("xlwings is required", work_completed=False)
@@ -248,5 +296,6 @@ __all__ = [
     "copy_template",
     "wait_ready",
     "run_excel_macro",
+    "write_home_fields",
     "read_cell",
 ]
