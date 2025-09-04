@@ -1,14 +1,24 @@
 from __future__ import annotations
 
-"""Helpers for sending success/failure notifications via SMTP."""
+"""Helpers for sending notifications via SMTP or webhooks."""
 
 import logging
 import os
 from email.message import EmailMessage
 from pathlib import Path
 import smtplib
+from typing import Any
+
+try:  # pragma: no cover - optional dependency
+    import requests  # type: ignore
+except Exception as _e:  # pragma: no cover
+    requests = None  # type: ignore
+    logging.basicConfig(level=logging.WARNING)
+    logging.warning("requests missing – webhooks disabled (%s)", _e)
 
 log = logging.getLogger(__name__)
+
+from .constants import BID_WEBHOOK_URI
 
 
 def _send(msg: EmailMessage) -> None:
@@ -97,4 +107,41 @@ def send_failure_email(to_addr: str, error_msg: str) -> None:
     _send(msg)
 
 
-__all__ = ["send_success_email", "send_failure_email"]
+def send_bid_webhook(
+    to_addr: str,
+    file_name: str,
+    sharepoint_url: str,
+    message: str,
+    extra: dict[str, Any] | None = None,
+) -> None:
+    """POST a notification to the BID Power Automate webhook."""
+
+    if requests is None:
+        log.warning("requests not available")
+        return
+    if not BID_WEBHOOK_URI:
+        log.warning("BID_WEBHOOK_URI not configured")
+        return
+
+    payload: dict[str, Any] = {
+        "email": to_addr,
+        "file_name": file_name,
+        "sharepoint_url": sharepoint_url,
+        "message": message,
+    }
+    if extra:
+        payload.update(extra)
+
+    try:
+        resp = requests.post(BID_WEBHOOK_URI, json=payload, timeout=10)
+        if resp.status_code >= 400:
+            log.warning(
+                "Webhook POST failed: %s %s",
+                resp.status_code,
+                resp.text,
+            )
+    except Exception as exc:  # pragma: no cover - network errors
+        log.warning("Webhook POST failed: %s", exc)
+
+
+__all__ = ["send_success_email", "send_failure_email", "send_bid_webhook"]

@@ -104,3 +104,80 @@ def test_failure_email_sent(monkeypatch, payload):
     assert args[0] == "notify@example.com"
     assert "boom" in args[1]
     success.assert_not_called()
+
+
+def test_bid_webhook_called(monkeypatch, payload):
+    """Webhook invoked when BID and NOTIFY_EMAIL provided."""
+
+    payload["BID-Payload"] = "guid123"
+    payload["item/In_dtInputData"][0]["NOTIFY_EMAIL"] = "notify@example.com"
+    with patch(
+        "fm_tool_core.process_fm_tool.run_excel_macro", return_value=_FakeWorkbook()
+    ), patch(
+        "fm_tool_core.process_fm_tool.read_cell", side_effect=["HUMD_VAN", "ok"]
+    ), patch(
+        "fm_tool_core.process_fm_tool.sp_ctx"
+    ), patch(
+        "fm_tool_core.process_fm_tool.sharepoint_file_exists", return_value=False
+    ), patch(
+        "fm_tool_core.process_fm_tool.sharepoint_upload"
+    ), patch(
+        "fm_tool_core.process_fm_tool.write_home_fields"
+    ), patch(
+        "fm_tool_core.process_fm_tool.wait_for_cpu"
+    ), patch(
+        "fm_tool_core.process_fm_tool.kill_orphan_excels"
+    ), patch(
+        "fm_tool_core.process_fm_tool.send_success_email"
+    ), patch(
+        "fm_tool_core.process_fm_tool.send_failure_email"
+    ), patch(
+        "fm_tool_core.process_fm_tool.send_bid_webhook"
+    ) as webhook:
+        core.run_flow(payload)
+
+    webhook.assert_called_once()
+    args = webhook.call_args[0]
+    assert args[0] == "notify@example.com"
+    assert args[1] == "dummy.xlsm"
+    assert args[2] == "https://example.sharepoint.com/NA/dummy.xlsm"
+    assert "succeeded" in args[3]
+    assert args[4]["BID_GUID"] == "guid123"
+
+
+@pytest.mark.parametrize("missing", ["BID-Payload", "NOTIFY_EMAIL"])
+def test_bid_webhook_skipped(monkeypatch, payload, missing):
+    """Webhook not called when BID or email missing."""
+
+    if missing != "BID-Payload":
+        payload["BID-Payload"] = "guid123"
+    if missing != "NOTIFY_EMAIL":
+        payload["item/In_dtInputData"][0]["NOTIFY_EMAIL"] = "notify@example.com"
+    else:
+        monkeypatch.delenv("NOTIFY_EMAIL", raising=False)
+    with patch(
+        "fm_tool_core.process_fm_tool.run_excel_macro", return_value=_FakeWorkbook()
+    ), patch(
+        "fm_tool_core.process_fm_tool.read_cell", side_effect=["HUMD_VAN", "ok"]
+    ), patch(
+        "fm_tool_core.process_fm_tool.sp_ctx"
+    ), patch(
+        "fm_tool_core.process_fm_tool.sharepoint_file_exists", return_value=False
+    ), patch(
+        "fm_tool_core.process_fm_tool.sharepoint_upload"
+    ), patch(
+        "fm_tool_core.process_fm_tool.write_home_fields"
+    ), patch(
+        "fm_tool_core.process_fm_tool.wait_for_cpu"
+    ), patch(
+        "fm_tool_core.process_fm_tool.kill_orphan_excels"
+    ), patch(
+        "fm_tool_core.process_fm_tool.send_success_email"
+    ), patch(
+        "fm_tool_core.process_fm_tool.send_failure_email"
+    ), patch(
+        "fm_tool_core.process_fm_tool.send_bid_webhook"
+    ) as webhook:
+        core.run_flow(payload)
+
+    webhook.assert_not_called()
