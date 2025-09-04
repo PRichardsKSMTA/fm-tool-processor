@@ -44,6 +44,19 @@ def test_write_home_fields(monkeypatch, tmp_path):
         "F10": SimpleNamespace(value=None),
         "G10": SimpleNamespace(value=None),
         "H10": SimpleNamespace(value=None),
+<<<<<<< HEAD
+=======
+        "AR36": SimpleNamespace(value=None),
+        "AR37": SimpleNamespace(value=None),
+        "AR38": SimpleNamespace(value=None),
+        "AR39": SimpleNamespace(value=None),
+        "AR40": SimpleNamespace(value=None),
+        "AR41": SimpleNamespace(value=None),
+        "AR42": SimpleNamespace(value=None),
+        "AR43": SimpleNamespace(value=None),
+        "AR44": SimpleNamespace(value=None),
+        "AR45": SimpleNamespace(value=None),
+>>>>>>> refs/remotes/origin/main
     }
 
     def range_side_effect(addr):
@@ -61,7 +74,12 @@ def test_write_home_fields(monkeypatch, tmp_path):
     monkeypatch.setattr(excel_utils, "xw", xw_mock)
 
     ids = ["c1", "c2", "c3", "c4", "c5"]
+<<<<<<< HEAD
     excel_utils.write_home_fields(tmp_path / "wb.xlsx", "pg", "cust", ids)
+=======
+    headers = {"ADHOC_INFO1": "A1", "ADHOC_INFO5": "A5", "ADHOC_INFO10": "A10"}
+    excel_utils.write_home_fields(tmp_path / "wb.xlsx", "pg", "cust", ids, headers)
+>>>>>>> refs/remotes/origin/main
     assert cells["BID"].value == "pg"
     assert cells["D8:H8"].value == "cust"
     assert cells["D8:H8"].api.Validation is validation_obj
@@ -70,6 +88,110 @@ def test_write_home_fields(monkeypatch, tmp_path):
     assert cells["F10"].value == "c3"
     assert cells["G10"].value == "c4"
     assert cells["H10"].value == "c5"
+<<<<<<< HEAD
+=======
+    assert cells["AR36"].value == "A1"
+    assert cells["AR40"].value == "A5"
+    assert cells["AR45"].value == "A10"
+    for addr in [
+        "AR37",
+        "AR38",
+        "AR39",
+        "AR41",
+        "AR42",
+        "AR43",
+        "AR44",
+    ]:
+        assert cells[addr].value == ""
+    wb.save.assert_called_once_with()
+    wb.close.assert_called_once_with()
+    app.kill.assert_called_once_with()
+    pc.CoInitialize.assert_called_once_with()
+    pc.CoUninitialize.assert_called_once_with()
+
+
+def test_write_home_fields_missing_bid(monkeypatch, tmp_path):
+    pc = SimpleNamespace(CoInitialize=MagicMock(), CoUninitialize=MagicMock())
+    monkeypatch.setattr(excel_utils, "pythoncom", pc)
+
+    cust_range = SimpleNamespace(value=None)
+    cust_range.api = SimpleNamespace(Validation=object())
+
+    cells = {
+        "D8:H8": cust_range,
+        "D10": SimpleNamespace(value=None),
+        "E10": SimpleNamespace(value=None),
+        "F10": SimpleNamespace(value=None),
+        "G10": SimpleNamespace(value=None),
+        "H10": SimpleNamespace(value=None),
+    }
+    for i in range(10):
+        cells[f"AR{36 + i}"] = SimpleNamespace(value=None)
+
+    def range_side_effect(addr):
+        if addr not in cells:
+            raise KeyError(addr)
+        return cells[addr]
+
+    sheet = SimpleNamespace(range=MagicMock(side_effect=range_side_effect))
+    wb = SimpleNamespace(sheets={"HOME": sheet}, save=MagicMock(), close=MagicMock())
+    app = SimpleNamespace(
+        api=SimpleNamespace(),
+        books=SimpleNamespace(open=MagicMock(return_value=wb)),
+        kill=MagicMock(),
+    )
+
+    monkeypatch.setattr(
+        excel_utils,
+        "xw",
+        SimpleNamespace(App=MagicMock(return_value=app)),
+    )
+
+    ids = ["c1", "c2", "c3", "c4", "c5"]
+    excel_utils.write_home_fields(tmp_path / "wb.xlsx", "pg", "cust", ids, None)
+    assert "BID" not in cells
+    assert cells["D8:H8"].value == "cust"
+    assert cells["D10"].value == "c1"
+    assert cells["H10"].value == "c5"
+    wb.save.assert_called_once_with()
+    wb.close.assert_called_once_with()
+    app.kill.assert_called_once_with()
+    pc.CoInitialize.assert_called_once_with()
+    pc.CoUninitialize.assert_called_once_with()
+
+
+def test_write_home_fields_no_headers_blank(monkeypatch, tmp_path):
+    pc = SimpleNamespace(CoInitialize=MagicMock(), CoUninitialize=MagicMock())
+    monkeypatch.setattr(excel_utils, "pythoncom", pc)
+
+    cells = {
+        "BID": SimpleNamespace(value=None),
+        "D8:H8": SimpleNamespace(value=None),
+    }
+    for i in range(10):
+        cells[f"AR{36 + i}"] = SimpleNamespace(value=None)
+
+    def range_side_effect(addr):
+        return cells[addr]
+
+    sheet = SimpleNamespace(range=MagicMock(side_effect=range_side_effect))
+    wb = SimpleNamespace(sheets={"HOME": sheet}, save=MagicMock(), close=MagicMock())
+    app = SimpleNamespace(
+        api=SimpleNamespace(),
+        books=SimpleNamespace(open=MagicMock(return_value=wb)),
+        kill=MagicMock(),
+    )
+
+    monkeypatch.setattr(
+        excel_utils,
+        "xw",
+        SimpleNamespace(App=MagicMock(return_value=app)),
+    )
+
+    excel_utils.write_home_fields(tmp_path / "wb.xlsx", None, None, None, None)
+    for addr in [f"AR{36 + i}" for i in range(10)]:
+        assert cells[addr].value == ""
+>>>>>>> refs/remotes/origin/main
     wb.save.assert_called_once_with()
     wb.close.assert_called_once_with()
     app.kill.assert_called_once_with()

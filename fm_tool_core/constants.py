@@ -26,6 +26,7 @@ SMTP_PORT = os.getenv("SMTP_PORT")
 SMTP_USERNAME = os.getenv("SMTP_USERNAME")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 SMTP_FROM = os.getenv("SMTP_FROM")
+BID_WEBHOOK_URI = os.getenv("BID_WEBHOOK_URI")
 
 __all__ = [
     "READY_NAME",
@@ -46,4 +47,5 @@ __all__ = [
     "SMTP_USERNAME",
     "SMTP_PASSWORD",
     "SMTP_FROM",
+    "BID_WEBHOOK_URI",
 ]

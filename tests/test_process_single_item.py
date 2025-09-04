@@ -5,6 +5,7 @@ Mocks heavy external dependencies (Excel & SharePoint) so we can assert that:
   * Validation logic branches correctly
 """
 
+<<<<<<< HEAD
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -12,6 +13,12 @@ from unittest.mock import patch
 import logging
 =======
 >>>>>>> 0626e50 (Update VM with current version)
+=======
+import logging
+from types import SimpleNamespace
+from unittest.mock import ANY, patch
+
+>>>>>>> refs/remotes/origin/main
 import pytest
 
 import fm_tool_core as core
@@ -59,6 +66,7 @@ def payload(tmp_path):
                 "ORDERAREAS_VALIDATION_COLUMN": "B",
                 "ORDERAREAS_VALIDATION_ROW": "1",
                 "ORDERAREAS_VALIDATION_VALUE": ("Input <> " "Order/Area"),
+                "CUSTOMER_NAME": "ACME",
             }
         ],
         "item/In_boolEnableSharePointUpload": False,
@@ -66,13 +74,9 @@ def payload(tmp_path):
     }
 
 
-def test_run_flow_success(payload):
+def test_run_flow_success(payload, caplog):
     """All validations pass -> Out_boolWorkcompleted=True"""
-
-    bid_rows = [
-        {"Lane ID": 1, "Orig Zip (5 or 3)": "12345", "Dest Zip (5 or 3)": "54321"}
-    ]
-    with patch(
+    with caplog.at_level(logging.INFO, logger="fm_tool"), patch(
         "fm_tool_core.process_fm_tool.run_excel_macro",
         return_value=_FakeWorkbook(),
     ) as macro, patch(
@@ -85,6 +89,7 @@ def test_run_flow_success(payload):
         return_value=False,
     ), patch(
         "fm_tool_core.process_fm_tool._fetch_bid_rows",
+<<<<<<< HEAD
         return_value=bid_rows,
     ), patch(
 <<<<<<< HEAD
@@ -102,11 +107,25 @@ def test_run_flow_success(payload):
         "fm_tool_core.process_fm_tool.write_named_cell"
     ) as write_cell:
 >>>>>>> 0626e50 (Update VM with current version)
+=======
+    ) as fetch_mock, patch(
+        "fm_tool_core.process_fm_tool._fetch_customer_ids",
+        return_value=["i1", "i2"],
+    ) as cid_mock, patch(
+        "fm_tool_core.process_fm_tool.write_home_fields",
+    ) as write_mock, patch(
+        "fm_tool_core.process_fm_tool._fetch_adhoc_headers",
+        return_value={"ADHOC_INFO1": "Origin (Live/Drop)"},
+    ) as adhoc_mock, patch(
+        "fm_tool_core.process_fm_tool.update_adhoc_headers",
+    ) as upd_mock:
+>>>>>>> refs/remotes/origin/main
         result = core.run_flow(payload)
     macro.assert_called_once()
     args_tuple = macro.call_args[0][1]
     assert len(args_tuple) == 4
     assert args_tuple[-1] == payload["BID-Payload"]
+<<<<<<< HEAD
 <<<<<<< HEAD
 =======
     write_cell.assert_called_once()
@@ -116,10 +135,29 @@ def test_run_flow_success(payload):
         payload["BID-Payload"],
     )
 >>>>>>> 0626e50 (Update VM with current version)
+=======
+    fetch_mock.assert_not_called()
+    cid_mock.assert_called_once_with(payload["BID-Payload"], ANY)
+    write_mock.assert_called_once_with(
+        ANY,
+        payload["BID-Payload"],
+        "ACME",
+        ["i1", "i2"],
+        {"ADHOC_INFO1": "Origin (Live/Drop)"},
+    )
+    adhoc_mock.assert_called_once_with(payload["BID-Payload"], ANY)
+    upd_mock.assert_called_once_with(
+        ANY,
+        {"ADHOC_INFO1": "Origin (Live/Drop)"},
+        ANY,
+    )
+    assert "Applying ad-hoc headers" in caplog.text
+>>>>>>> refs/remotes/origin/main
     assert result["Out_boolWorkcompleted"] is True
     assert result["Out_strWorkExceptionMessage"] == ""
 
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 def test_run_flow_inserts_bid_rows(payload, caplog):
 =======
@@ -211,6 +249,8 @@ def test_run_flow_skips_insert_when_no_rows(payload, caplog):
 
 
 >>>>>>> 0626e50 (Update VM with current version)
+=======
+>>>>>>> refs/remotes/origin/main
 def test_run_flow_without_bid_payload(payload):
     """run_excel_macro only receives three args when BID-Payload missing"""
 
@@ -227,6 +267,7 @@ def test_run_flow_without_bid_payload(payload):
         "fm_tool_core.process_fm_tool.sharepoint_file_exists",
         return_value=False,
 <<<<<<< HEAD
+<<<<<<< HEAD
     ):
         result = core.run_flow(payload)
     macro.assert_called_once()
@@ -240,4 +281,110 @@ def test_run_flow_without_bid_payload(payload):
     assert len(macro.call_args[0][1]) == 3
     write_cell.assert_not_called()
 >>>>>>> 0626e50 (Update VM with current version)
+=======
+    ), patch(
+        "fm_tool_core.process_fm_tool._fetch_customer_ids"
+    ) as cid_mock, patch(
+        "fm_tool_core.process_fm_tool.write_home_fields",
+    ) as write_mock, patch(
+        "fm_tool_core.process_fm_tool._fetch_adhoc_headers",
+    ) as adhoc_mock, patch(
+        "fm_tool_core.process_fm_tool.update_adhoc_headers",
+    ) as upd_mock:
+        result = core.run_flow(payload)
+    macro.assert_called_once()
+    assert len(macro.call_args[0][1]) == 3
+    write_mock.assert_called_once_with(ANY, None, "ACME", None, None)
+    cid_mock.assert_not_called()
+    adhoc_mock.assert_not_called()
+    upd_mock.assert_not_called()
+>>>>>>> refs/remotes/origin/main
     assert result["Out_boolWorkcompleted"] is True
+
+
+def test_run_flow_nit_ignores_bid_payload(payload):
+    """BID-Payload is ignored for NIT runs"""
+
+    payload["item/In_dtInputData"][0]["FM_TOOL"] = "NIT"
+    with patch(
+        "fm_tool_core.process_fm_tool.run_excel_macro",
+        return_value=_FakeWorkbook(),
+    ) as macro, patch(
+        "fm_tool_core.process_fm_tool.read_cell",
+        return_value="HUMD_VAN",
+    ), patch(
+        "fm_tool_core.process_fm_tool.sharepoint_upload"
+    ), patch(
+        "fm_tool_core.process_fm_tool.sharepoint_file_exists",
+        return_value=False,
+    ), patch(
+        "fm_tool_core.process_fm_tool._fetch_customer_ids"
+    ) as cid_mock, patch(
+        "fm_tool_core.process_fm_tool.write_home_fields"
+    ) as write_mock, patch(
+        "fm_tool_core.process_fm_tool._fetch_adhoc_headers"
+    ) as adhoc_mock, patch(
+        "fm_tool_core.process_fm_tool.update_adhoc_headers"
+    ) as upd_mock:
+        result = core.run_flow(payload)
+    macro.assert_called_once()
+    assert len(macro.call_args[0][1]) == 3
+    write_mock.assert_called_once_with(ANY, None, "ACME", None, None)
+    cid_mock.assert_not_called()
+    adhoc_mock.assert_not_called()
+    upd_mock.assert_not_called()
+    assert result["Out_boolWorkcompleted"] is True
+
+
+def test_upload_strips_path_from_filename(payload):
+    """SharePoint upload uses only the final path component"""
+
+    payload["item/In_boolEnableSharePointUpload"] = True
+    payload["item/In_dtInputData"][0]["NEW_EXCEL_FILENAME"] = "x/y/dummy.xlsm"
+    with patch(
+        "fm_tool_core.process_fm_tool.run_excel_macro",
+        return_value=_FakeWorkbook(),
+    ), patch(
+        "fm_tool_core.process_fm_tool.read_cell",
+        return_value="HUMD_VAN",
+    ), patch(
+        "fm_tool_core.process_fm_tool.sp_ctx",
+        return_value=object(),
+    ), patch(
+        "fm_tool_core.process_fm_tool.sharepoint_file_exists",
+        return_value=False,
+    ) as exists_mock, patch(
+        "fm_tool_core.process_fm_tool.sharepoint_upload"
+    ) as upload_mock, patch(
+        "fm_tool_core.process_fm_tool._fetch_bid_rows",
+    ), patch(
+        "fm_tool_core.process_fm_tool._fetch_customer_ids",
+        return_value=["i1"],
+    ), patch(
+        "fm_tool_core.process_fm_tool.write_home_fields",
+    ), patch(
+        "fm_tool_core.process_fm_tool._fetch_adhoc_headers",
+        return_value={},
+    ), patch(
+        "fm_tool_core.process_fm_tool.update_adhoc_headers",
+    ):
+        result = core.run_flow(payload)
+    upload_mock.assert_called_once()
+    assert upload_mock.call_args[0][2] == "dummy.xlsm"
+    rel_arg = exists_mock.call_args[0][1]
+    assert rel_arg.endswith("/dummy.xlsm")
+    assert result["Out_boolWorkcompleted"] is True
+
+
+def test_run_flow_raises_last_error_message(payload):
+    """Final error message includes the last process_row failure"""
+
+    payload["item/In_intMaxRetry"] = 2
+    with patch(
+        "fm_tool_core.process_fm_tool.process_row",
+        side_effect=[RuntimeError("first"), RuntimeError("second")],
+    ), patch("fm_tool_core.process_fm_tool.time.sleep"):
+        result = core.run_flow(payload)
+    assert result["Out_boolWorkcompleted"] is False
+    msg = result["Out_strWorkExceptionMessage"]
+    assert "second" in msg and "first" not in msg

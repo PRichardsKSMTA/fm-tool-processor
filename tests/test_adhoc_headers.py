@@ -33,11 +33,24 @@ def _setup_pyodbc(monkeypatch, json_str):
     monkeypatch.setattr(mod, "_sql_conn_str", lambda: "conn")
 
 
-def test_fetch_adhoc_headers_success(monkeypatch):
-    _setup_pyodbc(monkeypatch, '{"ADHOC_INFO1": "A", "ADHOC_INFO2": "B"}')
+def test_fetch_adhoc_headers_success(monkeypatch, caplog):
+    json_str = '{"adhoc_headers": {"ADHOC_INFO1": "Origin (Live/Drop)"}}'
+    _setup_pyodbc(monkeypatch, json_str)
     log = logging.getLogger("test")
-    res = mod._fetch_adhoc_headers("guid", log)
+    with caplog.at_level(logging.INFO):
+        res = mod._fetch_adhoc_headers("guid", log)
+    assert res == {"ADHOC_INFO1": "Origin (Live/Drop)"}
+    assert "Fetched custom headers" in caplog.text
+
+
+def test_fetch_adhoc_headers_legacy(monkeypatch, caplog):
+    json_str = '{"ADHOC_INFO1": "A", "ADHOC_INFO2": "B"}'
+    _setup_pyodbc(monkeypatch, json_str)
+    log = logging.getLogger("test")
+    with caplog.at_level(logging.INFO):
+        res = mod._fetch_adhoc_headers("guid", log)
     assert res == {"ADHOC_INFO1": "A", "ADHOC_INFO2": "B"}
+    assert "Fetched custom headers" in caplog.text
 
 
 def test_fetch_adhoc_headers_no_pyodbc(monkeypatch, caplog):

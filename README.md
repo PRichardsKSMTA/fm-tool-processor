@@ -30,3 +30,10 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 python -m fm_tool_core.process_fm_tool payload.json
+```
+
+## 📡 BID Webhook
+
+Set `BID_WEBHOOK_URI` to the Power Automate webhook URL. When both
+`BID-Payload` and `NOTIFY_EMAIL` are provided, the processor posts a
+JSON payload to this endpoint to trigger downstream Flow steps.
